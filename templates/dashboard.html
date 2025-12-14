@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - HisMarketing</title>
+    <link rel="stylesheet" href="/static/css/dashboard.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <img src="/images/logo.png" alt="HisMarketing" class="sidebar-logo" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+            <h2 class="sidebar-logo-text" style="display: none;">HisMarketing</h2>
+        </div>
+        
+        <nav class="sidebar-nav">
+            <a href="#" class="nav-item active" data-page="upload">
+                <i class="fas fa-upload"></i>
+                <span>Veri Yükle</span>
+            </a>
+            <a href="#" class="nav-item" data-page="analysis">
+                <i class="fas fa-chart-bar"></i>
+                <span>Analiz</span>
+            </a>
+            <a href="#" class="nav-item" data-page="prediction">
+                <i class="fas fa-brain"></i>
+                <span>Tahmin</span>
+            </a>
+            <a href="#" class="nav-item" data-page="reports">
+                <i class="fas fa-file-pdf"></i>
+                <span>Raporlar</span>
+            </a>
+        </nav>
+        
+        <div class="sidebar-footer">
+            <div class="user-info">
+                <i class="fas fa-user-circle"></i>
+                <div>
+                    <div class="user-name" id="userName">Kullanıcı</div>
+                    <div class="user-email" id="userEmail">user@email.com</div>
+                </div>
+            </div>
+            <button class="btn-logout" onclick="handleLogout()">
+                <i class="fas fa-sign-out-alt"></i>
+                Çıkış Yap
+            </button>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Upload Page -->
+        <div id="uploadPage" class="page active">
+            <div class="page-header">
+                <h1>Veri Yükleme</h1>
+                <p>Excel veya CSV dosyanızı yükleyerek analize başlayın</p>
+            </div>
+
+            <div class="upload-container">
+                <div class="upload-zone" id="uploadZone">
+                    <i class="fas fa-cloud-upload-alt upload-icon"></i>
+                    <h3>Dosya Yükle</h3>
+                    <p>Excel (.xlsx) veya CSV (.csv) formatında dosyanızı sürükleyin veya tıklayarak seçin</p>
+                    <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" style="display: none;">
+                    <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">
+                        <i class="fas fa-folder-open"></i> Dosya Seç
+                    </button>
+                </div>
+
+                <div id="uploadProgress" class="upload-progress" style="display: none;">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                    <p id="progressText">Yükleniyor...</p>
+                </div>
+
+                <div id="uploadSuccess" class="upload-success" style="display: none;">
+                    <i class="fas fa-check-circle"></i>
+                    <h3>Dosya başarıyla yüklendi!</h3>
+                    <p id="fileInfo"></p>
+                    <div class="detected-columns" id="detectedColumns"></div>
+                    <button class="btn btn-primary" onclick="processData()">
+                        <i class="fas fa-cogs"></i> Verileri Analiz Et
+                    </button>
+                </div>
+            </div>
+
+            <div class="info-cards">
+                <div class="info-card">
+                    <i class="fas fa-info-circle"></i>
+                    <h4>Sütun İsimleri Önemli Değil</h4>
+                    <p>Sistemimiz, farklı dillerdeki veya hatalı yazılmış sütun isimlerini otomatik olarak algılar</p>
+                </div>
+                <div class="info-card">
+                    <i class="fas fa-magic"></i>
+                    <h4>Eksik Veri ile Çalışır</h4>
+                    <p>Eksik veriler yüzünden endişelenmeyin, AI sistemi akıllıca tahminler yapabilir</p>
+                </div>
+                <div class="info-card">
+                    <i class="fas fa-shield-alt"></i>
+                    <h4>Güvenli ve Gizli</h4>
+                    <p>Verileriniz güvenli bir şekilde saklanır ve sadece sizin erişiminize açıktır</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Analysis Page -->
+        <div id="analysisPage" class="page">
+            <div class="page-header">
+                <h1>Veri Analizi</h1>
+                <p>İşletmenizin geçmiş performansı ve trendler</p>
+            </div>
+
+            <div class="stats-grid" id="statsGrid">
+                <div class="stat-card">
+                    <div class="stat-icon revenue">
+                        <i class="fas fa-dollar-sign"></i>
+                    </div>
+                    <div class="stat-content">
+                        <h3>Toplam Gelir</h3>
+                        <p class="stat-value" id="totalRevenue">-</p>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon expense">
+                        <i class="fas fa-money-bill-wave"></i>
+                    </div>
+                    <div class="stat-content">
+                        <h3>Toplam Gider</h3>
+                        <p class="stat-value" id="totalExpense">-</p>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon profit">
+                        <i class="fas fa-chart-line"></i>
+                    </div>
+                    <div class="stat-content">
+                        <h3>Net Kâr</h3>
+                        <p class="stat-value" id="netProfit">-</p>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon products">
+                        <i class="fas fa-box"></i>
+                    </div>
+                    <div class="stat-content">
+                        <h3>Ürün Sayısı</h3>
+                        <p class="stat-value" id="productCount">-</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="charts-container">
+                <div class="chart-card">
+                    <h3>Aylık Satış Trendi</h3>
+                    <canvas id="salesTrendChart"></canvas>
+                </div>
+                <div class="chart-card">
+                    <h3>Ürün Bazlı Kâr Dağılımı</h3>
+                    <canvas id="productProfitChart"></canvas>
+                </div>
+            </div>
+
+            <div class="table-card">
+                <div class="table-header">
+                    <h3>En Çok Satan Ürünler</h3>
+                    <button class="btn btn-outline" onclick="downloadPDF('analysis')">
+                        <i class="fas fa-file-pdf"></i> PDF İndir
+                    </button>
+                </div>
+                <div class="table-container" id="topProductsTable"></div>
+            </div>
+        </div>
+
+        <!-- Prediction Page -->
+        <div id="predictionPage" class="page">
+            <div class="page-header">
+                <h1>Stok Tahmini</h1>
+                <p>Yapay zeka destekli 6 aylık stok önerileri</p>
+            </div>
+
+            <div class="prediction-controls">
+                <button class="btn btn-primary" onclick="generatePredictions()" id="generateBtn">
+                    <i class="fas fa-magic"></i> Tahmin Oluştur
+                </button>
+                <div class="accuracy-badge" id="accuracyBadge" style="display: none;">
+                    <i class="fas fa-certificate"></i>
+                    <span id="accuracyText">Doğruluk: -</span>
+                </div>
+            </div>
+
+            <div id="predictionResults" style="display: none;">
+                <div class="table-card">
+                    <div class="table-header">
+                        <h3>6 Aylık Stok Tahmini</h3>
+                        <button class="btn btn-outline" onclick="downloadExcel('prediction')">
+                            <i class="fas fa-file-excel"></i> Excel İndir
+                        </button>
+                    </div>
+                    <div class="table-container" id="predictionTable"></div>
+                </div>
+
+                <div class="charts-container">
+                    <div class="chart-card">
+                        <h3>Tahmini Satış Grafiği</h3>
+                        <canvas id="predictionChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="recommendations" id="recommendations"></div>
+            </div>
+        </div>
+
+        <!-- Reports Page -->
+        <div id="reportsPage" class="page">
+            <div class="page-header">
+                <h1>Raporlar</h1>
+                <p>Analiz ve tahmin raporlarınızı indirin</p>
+            </div>
+
+            <div class="reports-grid">
+                <div class="report-card">
+                    <i class="fas fa-chart-bar"></i>
+                    <h3>Analiz Raporu</h3>
+                    <p>Geçmiş satış verileri, kâr-zarar analizi ve trendler</p>
+                    <button class="btn btn-primary" onclick="downloadPDF('analysis')">
+                        <i class="fas fa-download"></i> PDF İndir
+                    </button>
+                </div>
+                <div class="report-card">
+                    <i class="fas fa-brain"></i>
+                    <h3>Tahmin Raporu</h3>
+                    <p>6 aylık stok tahminleri ve öneriler</p>
+                    <button class="btn btn-primary" onclick="downloadExcel('prediction')">
+                        <i class="fas fa-download"></i> Excel İndir
+                    </button>
+                </div>
+                <div class="report-card">
+                    <i class="fas fa-file-alt"></i>
+                    <h3>Detaylı Rapor</h3>
+                    <p>Tüm analizler ve tahminlerin kapsamlı özeti</p>
+                    <button class="btn btn-primary" onclick="downloadPDF('full')">
+                        <i class="fas fa-download"></i> PDF İndir
+                    </button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="/static/js/dashboard.js"></script>
+</body>
+</html>

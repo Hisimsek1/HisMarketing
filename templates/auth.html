@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Giriş Yap / Kayıt Ol - HisMarketing</title>
+    <link rel="stylesheet" href="/static/css/auth.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="auth-container">
+        <div class="auth-header">
+            <a href="/" class="back-home">
+                <i class="fas fa-arrow-left"></i> Ana Sayfa
+            </a>
+        </div>
+
+        <div class="auth-card">
+            <div class="logo-section">
+                <img src="static/images/logo.png" alt="HisMarketing Logo" class="logo" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                <h1 class="logo-text" style="display: none;">HisMarketing</h1>
+            </div>
+
+            <!-- Login Form -->
+            <div id="loginForm" class="form-container">
+                <h2 class="form-title">Giriş Yap</h2>
+                <p class="form-subtitle">Hesabınıza giriş yapın</p>
+
+                <form onsubmit="handleLogin(event)">
+                    <div class="form-group">
+                        <label for="loginEmail">
+                            <i class="fas fa-envelope"></i> E-posta
+                        </label>
+                        <input type="email" id="loginEmail" required placeholder="ornek@email.com">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="loginPassword">
+                            <i class="fas fa-lock"></i> Şifre
+                        </label>
+                        <input type="password" id="loginPassword" required placeholder="••••••••">
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-sign-in-alt"></i> Giriş Yap
+                        </button>
+                    </div>
+                </form>
+
+                <div class="form-switch">
+                    Hesabınız yok mu? 
+                    <a href="#" onclick="switchForm('register'); return false;">Kayıt Ol</a>
+                </div>
+            </div>
+
+            <!-- Register Form -->
+            <div id="registerForm" class="form-container" style="display: none;">
+                <h2 class="form-title">Kayıt Ol</h2>
+                <p class="form-subtitle">Yeni hesap oluşturun</p>
+
+                <form onsubmit="handleRegister(event)">
+                    <div class="form-group">
+                        <label for="registerName">
+                            <i class="fas fa-user"></i> Ad Soyad
+                        </label>
+                        <input type="text" id="registerName" required placeholder="Adınız Soyadınız">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="registerEmail">
+                            <i class="fas fa-envelope"></i> E-posta
+                        </label>
+                        <input type="email" id="registerEmail" required placeholder="ornek@email.com">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="registerCompany">
+                            <i class="fas fa-building"></i> İşletme Adı
+                        </label>
+                        <input type="text" id="registerCompany" required placeholder="İşletme adınız">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="registerPassword">
+                            <i class="fas fa-lock"></i> Şifre
+                        </label>
+                        <input type="password" id="registerPassword" required placeholder="••••••••" minlength="6">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="registerPasswordConfirm">
+                            <i class="fas fa-lock"></i> Şifre Tekrar
+                        </label>
+                        <input type="password" id="registerPasswordConfirm" required placeholder="••••••••" minlength="6">
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-user-plus"></i> Kayıt Ol
+                        </button>
+                    </div>
+                </form>
+
+                <div class="form-switch">
+                    Zaten hesabınız var mı? 
+                    <a href="#" onclick="switchForm('login'); return false;">Giriş Yap</a>
+                </div>
+            </div>
+
+            <div id="messageBox" class="message-box"></div>
+        </div>
+    </div>
+
+    <script src="/static/js/auth.js"></script>
+</body>
+</html>
