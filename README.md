@@ -164,7 +164,7 @@ E-Ticaret
 - Kampanya dönemlerinde stok planlaması
 - Kategori bazlı analiz
 
-Hedef Kitle
+Hedef Kitle;
 
 - Küçük ve orta ölçekli işletmeler
 - Perakende mağazalar
