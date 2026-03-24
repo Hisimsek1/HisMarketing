@@ -10,7 +10,6 @@ HisMarketing, küçük ve orta ölçekli işletmeler için geliştirilmiş, yapa
 -  Eksik stok nedeniyle satış kaybını önlemek
 -  Kâr oranını artırmak
 -  Veri odaklı kararlar almak
--  Takipi kolaylaştırmak
 
 Özellikler
 
