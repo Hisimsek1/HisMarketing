@@ -6,7 +6,7 @@ HisMarketing, küçük ve orta ölçekli işletmeler için geliştirilmiş, yapa
 
  Temel Amaç
 
--  Stok fazlasını azaltmak
+-  Stok fazlasını azaltmak 
 -  Eksik stok nedeniyle satış kaybını önlemek
 -  Kâr oranını artırmak
 -  Veri odaklı kararlar almak
