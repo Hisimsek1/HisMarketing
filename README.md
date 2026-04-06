@@ -4,7 +4,7 @@ Proje Hakkında
 
 HisMarketing, küçük ve orta ölçekli işletmeler için geliştirilmiş, yapay zeka destekli akıllı bir stok tahmin ve yönetim platformudur. Geçmiş satış verilerinizi analiz ederek, gelecekte hangi ürünün ne kadar satılacağını yüksek doğrulukla tahmin eder.
 
- Temel Amaç
+ Temel Amaç;
 
 -  Stok fazlasını azaltmak
 -  Eksik stok nedeniyle satış kaybını önlemek
