@@ -71,6 +71,7 @@ function showPage(pageName) {
         'reports': 'reportsPage',
         'compare': 'comparePage',
         'alerts': 'alertsPage',
+        'eoq': 'eoqPage',
         'abc': 'abcPage',
         'profile': 'profilePage',
     };
@@ -1298,6 +1299,77 @@ function setupSearchInputs() {
     }
     bindSearch('productSearchAnalysis', 'topProductsTable');
     bindSearch('productSearchPrediction', 'predictionTable');
+}
+
+// ===== EOQ HESAPLAYICI =====
+
+async function runEoqCalc() {
+    if (!currentData || !currentData.file_id) {
+        alert('Lütfen önce veri yükleyip analiz edin!');
+        return;
+    }
+
+    const holdingCostPct = parseFloat(document.getElementById('holdingCostPct').value) || 20;
+    const orderCost = parseFloat(document.getElementById('orderCost').value) || 50;
+    const token = localStorage.getItem('userToken');
+    const resultsDiv = document.getElementById('eoqResults');
+    resultsDiv.innerHTML = '<div style="text-align:center;padding:30px;"><i class="fas fa-spinner fa-spin" style="font-size:2rem;color:#2563eb;"></i><p style="margin-top:12px;">Hesaplanıyor...</p></div>';
+
+    try {
+        const res = await fetch('/api/tools/eoq', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+            body: JSON.stringify({ file_id: currentData.file_id, holding_cost_pct: holdingCostPct, order_cost: orderCost })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message);
+        renderEoqResults(data);
+    } catch (err) {
+        resultsDiv.innerHTML = `<div class="alert-item critical"><i class="fas fa-exclamation-circle"></i> Hata: ${err.message}</div>`;
+    }
+}
+
+function renderEoqResults(data) {
+    const { results, holding_cost_pct, order_cost } = data;
+    let html = `
+        <div class="card">
+            <h3 style="margin-bottom:4px;">Optimal Sipariş Miktarları</h3>
+            <p style="color:#64748b;margin-bottom:16px;font-size:.88rem;">
+                Tutma maliyeti: %${holding_cost_pct} — Sipariş maliyeti: ₺${order_cost}
+            </p>
+            <div style="overflow-x:auto;">
+            <table>
+                <thead><tr>
+                    <th>Ürün</th>
+                    <th>Yıllık Talep</th>
+                    <th>Birim Fiyat</th>
+                    <th><span title="Economic Order Quantity — Optimal sipariş miktarı">EOQ ⓘ</span></th>
+                    <th>Yılda Sipariş</th>
+                    <th>Sipariş Aralığı (gün)</th>
+                    <th>Yıllık Maliyet</th>
+                </tr></thead>
+                <tbody>`;
+
+    results.forEach((r, i) => {
+        html += `<tr style="background:${i%2===0?'#fff':'#f8fafc'}">
+            <td><strong>${r.product}</strong></td>
+            <td>${r.annual_demand.toLocaleString('tr-TR')}</td>
+            <td>₺${r.unit_price.toLocaleString('tr-TR', {minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+            <td><strong style="color:#2563eb;">${r.eoq.toLocaleString('tr-TR')}</strong></td>
+            <td>${r.orders_per_year}</td>
+            <td>${r.cycle_days} gün</td>
+            <td>₺${r.total_annual_cost.toLocaleString('tr-TR', {minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+        </tr>`;
+    });
+
+    html += `</tbody></table></div>
+        <div style="margin-top:16px;padding:14px;background:#eff6ff;border-radius:8px;font-size:.85rem;color:#1e40af;">
+            <strong>EOQ Formülü:</strong> EOQ = √(2 × Yıllık Talep × Sipariş Maliyeti / Birim Tutma Maliyeti)
+            — En az toplam maliyetle sipariş verilmesi gereken miktarı gösterir.
+        </div>
+        </div>`;
+
+    document.getElementById('eoqResults').innerHTML = html;
 }
 
 // ===== ABC ANALİZİ =====

@@ -746,6 +746,106 @@ def change_password(user_email):
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
+# ===== EOQ HESAPLAYICI API =====
+
+@app.route('/api/tools/eoq', methods=['POST'])
+@require_auth
+def calculate_eoq(user_email):
+    """
+    EOQ (Economic Order Quantity) hesaplayıcısı.
+    Body: { file_id, holding_cost_pct (%), order_cost (₺) }
+    EOQ = sqrt(2 * D * S / H)
+    D = Yıllık talep, S = Sipariş maliyeti, H = Birim başına yıllık tutma maliyeti
+    """
+    try:
+        body = request.json
+        file_id = body.get('file_id')
+        holding_cost_pct = float(body.get('holding_cost_pct', 20)) / 100
+        order_cost = float(body.get('order_cost', 50))
+
+        if not file_id or user_email not in user_files or file_id not in user_files[user_email]:
+            return jsonify({'success': False, 'message': 'Dosya bulunamadı'}), 404
+
+        file_data = user_files[user_email][file_id]
+        if 'df' not in file_data:
+            return jsonify({'success': False, 'message': 'Önce veri analizi yapın'}), 400
+
+        df = file_data['df'].copy()
+        di = file_data['data_intelligence']
+
+        product_col = di.get_column('product')
+        quantity_col = di.get_column('quantity')
+        price_col = di.get_column('price') or di.get_column('revenue')
+
+        if not product_col or not quantity_col:
+            return jsonify({'success': False, 'message': 'Ürün veya miktar sütunu bulunamadı'}), 400
+
+        # Tarih aralığını belirle (yıllık talep için)
+        date_col = di.get_column('date')
+        date_range_days = 365
+        if date_col and date_col in df.columns:
+            df[date_col] = pd.to_datetime(df[date_col], errors='coerce')
+            date_range_days = max(1, (df[date_col].max() - df[date_col].min()).days)
+
+        results = []
+        product_groups = df.groupby(product_col)
+
+        for product, group in product_groups:
+            total_qty = float(group[quantity_col].sum())
+            if total_qty <= 0:
+                continue
+
+            # Yıllık talep (günlük ortalamadan hesapla)
+            annual_demand = total_qty / date_range_days * 365
+
+            # Birim fiyat (ortalama)
+            unit_price = 1.0
+            if price_col and price_col in group.columns:
+                qty_sum = group[quantity_col].sum()
+                if qty_sum > 0:
+                    unit_price = float(group[price_col].sum() / qty_sum)
+                    if unit_price <= 0:
+                        unit_price = 1.0
+
+            holding_cost_per_unit = unit_price * holding_cost_pct
+
+            import math
+            if holding_cost_per_unit > 0 and order_cost > 0 and annual_demand > 0:
+                eoq = math.sqrt(2 * annual_demand * order_cost / holding_cost_per_unit)
+                orders_per_year = annual_demand / eoq
+                cycle_days = 365 / orders_per_year if orders_per_year > 0 else 365
+                total_cost = (annual_demand / eoq) * order_cost + (eoq / 2) * holding_cost_per_unit
+            else:
+                eoq = 0
+                orders_per_year = 0
+                cycle_days = 0
+                total_cost = 0
+
+            results.append({
+                'product': str(product),
+                'annual_demand': round(annual_demand, 1),
+                'unit_price': round(unit_price, 2),
+                'eoq': round(eoq, 0),
+                'orders_per_year': round(orders_per_year, 1),
+                'cycle_days': round(cycle_days, 0),
+                'total_annual_cost': round(total_cost, 2),
+            })
+
+        results.sort(key=lambda x: x['annual_demand'], reverse=True)
+
+        return jsonify({
+            'success': True,
+            'results': results[:20],
+            'holding_cost_pct': holding_cost_pct * 100,
+            'order_cost': order_cost,
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 # ===== ABC ANALİZİ API =====
 
 @app.route('/api/data/abc-analysis', methods=['POST'])
