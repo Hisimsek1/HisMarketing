@@ -71,6 +71,7 @@ function showPage(pageName) {
         'reports': 'reportsPage',
         'compare': 'comparePage',
         'alerts': 'alertsPage',
+        'margin': 'marginPage',
         'eoq': 'eoqPage',
         'abc': 'abcPage',
         'profile': 'profilePage',
@@ -1299,6 +1300,106 @@ function setupSearchInputs() {
     }
     bindSearch('productSearchAnalysis', 'topProductsTable');
     bindSearch('productSearchPrediction', 'predictionTable');
+}
+
+// ===== KAR MARJI ANALİZİ =====
+
+async function runMarginAnalysis() {
+    if (!currentData || !currentData.file_id) {
+        alert('Lütfen önce veri yükleyip analiz edin!');
+        return;
+    }
+    const token = localStorage.getItem('userToken');
+    const content = document.getElementById('marginContent');
+    content.innerHTML = '<div style="text-align:center;padding:30px;"><i class="fas fa-spinner fa-spin" style="font-size:2rem;color:#2563eb;"></i><p style="margin-top:12px;">Kar marjları hesaplanıyor...</p></div>';
+
+    try {
+        const res = await fetch('/api/data/margin-analysis', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+            body: JSON.stringify({ file_id: currentData.file_id })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message);
+        renderMarginResults(data);
+    } catch (err) {
+        content.innerHTML = `<div class="alert-item critical"><i class="fas fa-exclamation-circle"></i> Hata: ${err.message}</div>`;
+    }
+}
+
+function renderMarginResults(data) {
+    const { products, overall } = data;
+    const fmt = v => v.toLocaleString('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2});
+    const pctColor = p => p >= 30 ? '#10b981' : p >= 15 ? '#f59e0b' : '#ef4444';
+
+    // Genel özet kartları
+    let html = `
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px;">
+            <div class="stat-card"><div class="stat-label">Toplam Gelir</div><div class="stat-value">₺${fmt(overall.revenue)}</div></div>
+            <div class="stat-card"><div class="stat-label">Toplam Maliyet</div><div class="stat-value">₺${fmt(overall.cost)}</div></div>
+            <div class="stat-card"><div class="stat-label">Net Kâr</div><div class="stat-value" style="color:${overall.profit>=0?'#10b981':'#ef4444'}">₺${fmt(overall.profit)}</div></div>
+            <div class="stat-card"><div class="stat-label">Genel Marj</div><div class="stat-value" style="color:${pctColor(overall.margin_pct)}">%${overall.margin_pct}</div></div>
+        </div>`;
+
+    // Grafik
+    html += `<div class="card" style="margin-bottom:24px;">
+        <h3 style="margin-bottom:16px;">Ürün Kar Marjı Grafiği (İlk 15 Ürün)</h3>
+        <canvas id="marginChart" height="120"></canvas>
+    </div>`;
+
+    // Tablo
+    html += `<div class="card"><h3 style="margin-bottom:16px;">Ürün Bazında Kar Marjı</h3>
+        <div style="overflow-x:auto;"><table>
+            <thead><tr><th>Ürün</th><th>Gelir</th><th>Maliyet</th><th>Kâr</th><th>Marj %</th></tr></thead>
+            <tbody>`;
+
+    products.forEach((p, i) => {
+        const color = pctColor(p.margin_pct);
+        html += `<tr style="background:${i%2===0?'#fff':'#f8fafc'}">
+            <td><strong>${p.product}</strong></td>
+            <td>₺${fmt(p.revenue)}</td>
+            <td>₺${fmt(p.cost)}</td>
+            <td style="color:${p.profit>=0?'#10b981':'#ef4444'}">₺${fmt(p.profit)}</td>
+            <td><span style="background:${color}20;color:${color};font-weight:700;padding:3px 10px;border-radius:20px;border:1.5px solid ${color};">%${p.margin_pct}</span></td>
+        </tr>`;
+    });
+    html += '</tbody></table></div></div>';
+
+    document.getElementById('marginContent').innerHTML = html;
+
+    // Grafiği çiz
+    const top15 = products.slice(0, 15);
+    const bgColors = top15.map(p => pctColor(p.margin_pct) + 'cc');
+    const borderColors = top15.map(p => pctColor(p.margin_pct));
+
+    setTimeout(() => {
+        const ctx = getOrDestroyChart('marginChart');
+        if (ctx) {
+            registerChart('marginChart', new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: top15.map(p => p.product),
+                    datasets: [{
+                        label: 'Kar Marjı %',
+                        data: top15.map(p => p.margin_pct),
+                        backgroundColor: bgColors,
+                        borderColor: borderColors,
+                        borderWidth: 2,
+                        borderRadius: 6,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    indexAxis: 'y',
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { beginAtZero: true, ticks: { callback: v => '%' + v } },
+                        y: { ticks: { font: { size: 11 } } }
+                    }
+                }
+            }));
+        }
+    }, 50);
 }
 
 // ===== EOQ HESAPLAYICI =====

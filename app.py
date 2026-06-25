@@ -746,6 +746,91 @@ def change_password(user_email):
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
+# ===== KAR MARJI ANALİZİ API =====
+
+@app.route('/api/data/margin-analysis', methods=['POST'])
+@require_auth
+def margin_analysis(user_email):
+    """
+    Ürün bazında kar marjı analizi.
+    Gelir ve maliyet bilgisi olan ürünler için marj % hesaplar.
+    """
+    try:
+        file_id = request.json.get('file_id')
+
+        if not file_id or user_email not in user_files or file_id not in user_files[user_email]:
+            return jsonify({'success': False, 'message': 'Dosya bulunamadı'}), 404
+
+        file_data = user_files[user_email][file_id]
+        if 'df' not in file_data:
+            return jsonify({'success': False, 'message': 'Önce veri analizi yapın'}), 400
+
+        df = file_data['df'].copy()
+        di = file_data['data_intelligence']
+
+        product_col = di.get_column('product')
+        revenue_col = di.get_column('revenue')
+        cost_col = di.get_column('cost')
+        quantity_col = di.get_column('quantity')
+
+        if not product_col:
+            return jsonify({'success': False, 'message': 'Ürün sütunu bulunamadı'}), 400
+        if not revenue_col and not cost_col:
+            return jsonify({'success': False, 'message': 'Gelir veya maliyet sütunu bulunamadı'}), 400
+
+        agg = {quantity_col: 'sum'} if quantity_col else {}
+        if revenue_col:
+            agg[revenue_col] = 'sum'
+        if cost_col:
+            agg[cost_col] = 'sum'
+
+        summary = df.groupby(product_col).agg(agg).reset_index()
+        summary.columns = [product_col] + list(agg.keys())
+
+        results = []
+        for _, row in summary.iterrows():
+            revenue = float(row[revenue_col]) if revenue_col else 0
+            cost = float(row[cost_col]) if cost_col else 0
+            quantity = float(row[quantity_col]) if quantity_col else 0
+            profit = revenue - cost
+            margin_pct = (profit / revenue * 100) if revenue > 0 else 0
+
+            results.append({
+                'product': str(row[product_col]),
+                'revenue': round(revenue, 2),
+                'cost': round(cost, 2),
+                'profit': round(profit, 2),
+                'margin_pct': round(margin_pct, 1),
+                'quantity': round(quantity, 0),
+            })
+
+        # En yüksek gelire göre sırala, sonra margine göre
+        results.sort(key=lambda x: x['revenue'], reverse=True)
+
+        overall_revenue = sum(r['revenue'] for r in results)
+        overall_cost = sum(r['cost'] for r in results)
+        overall_profit = overall_revenue - overall_cost
+        overall_margin = (overall_profit / overall_revenue * 100) if overall_revenue > 0 else 0
+
+        return jsonify({
+            'success': True,
+            'products': results[:30],
+            'overall': {
+                'revenue': round(overall_revenue, 2),
+                'cost': round(overall_cost, 2),
+                'profit': round(overall_profit, 2),
+                'margin_pct': round(overall_margin, 1),
+            },
+            'has_cost': bool(cost_col),
+            'has_revenue': bool(revenue_col),
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 # ===== EOQ HESAPLAYICI API =====
 
 @app.route('/api/tools/eoq', methods=['POST'])
