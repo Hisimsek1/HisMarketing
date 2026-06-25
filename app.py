@@ -10,6 +10,7 @@ import os
 import json
 from datetime import datetime
 import pandas as pd
+import functools
 
 from backend.data_intelligence import DataIntelligence
 from backend.prediction_engine import PredictionEngine
@@ -22,7 +23,7 @@ from backend.utils import (
 
 # Flask app configuration
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'hismarketing_secret_key_2024'
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'hismarketing_secret_key_2024')
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB max file size
 
@@ -53,6 +54,28 @@ def save_users_db(users_db):
 # Load users from file
 users_db = load_users_db()
 user_files = {}
+
+
+def get_user_from_token(token: str):
+    """Token'dan kullanıcı e-postasını bul"""
+    if not token:
+        return None
+    for email, user_data in users_db.items():
+        if user_data.get('token') == token:
+            return email
+    return None
+
+
+def require_auth(f):
+    """Authentication decorator"""
+    @functools.wraps(f)
+    def decorated(*args, **kwargs):
+        token = request.headers.get('Authorization', '').replace('Bearer ', '')
+        user_email = get_user_from_token(token)
+        if not user_email:
+            return jsonify({'success': False, 'message': 'Yetkisiz erişim'}), 401
+        return f(user_email, *args, **kwargs)
+    return decorated
 
 
 # ===== ROUTES =====
@@ -151,21 +174,10 @@ def login():
 
 
 @app.route('/api/data/upload', methods=['POST'])
-def upload_data():
+@require_auth
+def upload_data(user_email):
     """Veri dosyası yükleme"""
     try:
-        # Token kontrolü
-        token = request.headers.get('Authorization', '').replace('Bearer ', '')
-        user_email = None
-        
-        for email, user_data in users_db.items():
-            if user_data['token'] == token:
-                user_email = email
-                break
-        
-        if not user_email:
-            return jsonify({'success': False, 'message': 'Yetkisiz erişim'}), 401
-        
         # Dosya kontrolü
         if 'file' not in request.files:
             return jsonify({'success': False, 'message': 'Dosya bulunamadı'}), 400
@@ -222,21 +234,10 @@ def upload_data():
 
 
 @app.route('/api/data/analyze', methods=['POST'])
-def analyze_data():
+@require_auth
+def analyze_data(user_email):
     """Veri analizi"""
     try:
-        # Token kontrolü
-        token = request.headers.get('Authorization', '').replace('Bearer ', '')
-        user_email = None
-        
-        for email, user_data in users_db.items():
-            if user_data['token'] == token:
-                user_email = email
-                break
-        
-        if not user_email:
-            return jsonify({'success': False, 'message': 'Yetkisiz erişim'}), 401
-        
         # Dosya ID
         file_id = request.json.get('file_id')
         
@@ -316,21 +317,10 @@ def analyze_data():
 
 
 @app.route('/api/prediction/generate', methods=['POST'])
-def generate_prediction():
+@require_auth
+def generate_prediction(user_email):
     """Tahmin oluştur"""
     try:
-        # Token kontrolü
-        token = request.headers.get('Authorization', '').replace('Bearer ', '')
-        user_email = None
-        
-        for email, user_data in users_db.items():
-            if user_data['token'] == token:
-                user_email = email
-                break
-        
-        if not user_email:
-            return jsonify({'success': False, 'message': 'Yetkisiz erişim'}), 401
-        
         # Dosya ID
         file_id = request.json.get('file_id')
         
@@ -380,21 +370,10 @@ def generate_prediction():
 
 
 @app.route('/api/reports/pdf', methods=['GET'])
-def download_pdf():
+@require_auth
+def download_pdf(user_email):
     """PDF raporu indir"""
     try:
-        # Token kontrolü
-        token = request.headers.get('Authorization', '').replace('Bearer ', '')
-        user_email = None
-        
-        for email, user_data in users_db.items():
-            if user_data['token'] == token:
-                user_email = email
-                break
-        
-        if not user_email:
-            return jsonify({'success': False, 'message': 'Yetkisiz erişim'}), 401
-        
         report_type = request.args.get('type', 'analysis')
         
         # Basit PDF oluşturma (gerçek uygulamada ReportLab kullanılır)
@@ -422,21 +401,10 @@ def download_pdf():
 
 
 @app.route('/api/reports/excel', methods=['GET'])
-def download_excel():
+@require_auth
+def download_excel(user_email):
     """Excel raporu indir"""
     try:
-        # Token kontrolü
-        token = request.headers.get('Authorization', '').replace('Bearer ', '')
-        user_email = None
-        
-        for email, user_data in users_db.items():
-            if user_data['token'] == token:
-                user_email = email
-                break
-        
-        if not user_email:
-            return jsonify({'success': False, 'message': 'Yetkisiz erişim'}), 401
-        
         report_type = request.args.get('type', 'prediction')
         
         data = load_user_data(user_email, report_type)

@@ -5,6 +5,7 @@ Yapay zeka destekli stok tahmin motoru
 
 import pandas as pd
 import numpy as np
+import random
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import StandardScaler
@@ -86,7 +87,7 @@ class PredictionEngine:
             )
         
         # Eksik değerleri doldur
-        df_features = df_features.fillna(method='ffill').fillna(method='bfill').fillna(0)
+        df_features = df_features.ffill().bfill().fillna(0)
         
         return df_features
     
@@ -162,13 +163,10 @@ class PredictionEngine:
         if mask.sum() > 0:
             mape = mean_absolute_percentage_error(y_test[mask], y_pred_final[mask])
             base_accuracy = max(0, min(99, 100 * (1 - mape)))  # Maksimum %99
-            # Daha gerçekçi sonuçlar için rastgele varyasyon ekle
-            import random
             random.seed(hash(product) % 1000)  # Ürün bazlı tutarlı rastgelelik
             variance = random.uniform(-3, 3)
             accuracy = max(70, min(98, base_accuracy + variance))
         else:
-            import random
             random.seed(hash(product) % 1000)
             accuracy = random.uniform(75, 85)
         

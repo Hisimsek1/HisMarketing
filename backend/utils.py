@@ -4,6 +4,7 @@ Yardımcı fonksiyonlar ve araçlar
 """
 
 import pandas as pd
+import numpy as np
 import os
 import uuid
 from datetime import datetime
@@ -246,4 +247,3 @@ class NumpyEncoder(json.JSONEncoder):
         return super(NumpyEncoder, self).default(obj)
 
 
-import numpy as np  # NumpyEncoder için gerekli

@@ -186,16 +186,16 @@ class DataIntelligence:
                     # Medyan ile doldur
                     median_val = df_prepared[col_name].median()
                     if pd.notna(median_val):
-                        df_prepared[col_name].fillna(median_val, inplace=True)
+                        df_prepared[col_name] = df_prepared[col_name].fillna(median_val)
                     else:
-                        df_prepared[col_name].fillna(0, inplace=True)
+                        df_prepared[col_name] = df_prepared[col_name].fillna(0)
         
         # Metin sütunlarındaki eksik değerleri doldur
         text_types = ['product', 'category', 'supplier', 'location']
         for col_type in text_types:
             col_name = self.get_column(col_type)
             if col_name and col_name in df_prepared.columns:
-                df_prepared[col_name].fillna('Bilinmeyen', inplace=True)
+                df_prepared[col_name] = df_prepared[col_name].fillna('Bilinmeyen')
         
         return df_prepared
     
