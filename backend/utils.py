@@ -213,15 +213,13 @@ def create_product_summary(df: pd.DataFrame, product_col: str, quantity_col: str
     
     if revenue_col and revenue_col in df.columns:
         revenue_sum = df.groupby(product_col)[revenue_col].sum().reset_index()
-        summary = summary.merge(revenue_sum, left_on='product', right_on=product_col, how='left')
-        summary = summary.drop(columns=[product_col])
-        summary = summary.rename(columns={revenue_col: 'total_revenue'})
-    
+        revenue_sum = revenue_sum.rename(columns={product_col: 'product', revenue_col: 'total_revenue'})
+        summary = summary.merge(revenue_sum, on='product', how='left')
+
     if cost_col and cost_col in df.columns:
         cost_sum = df.groupby(product_col)[cost_col].sum().reset_index()
-        summary = summary.merge(cost_sum, left_on='product', right_on=product_col, how='left')
-        summary = summary.drop(columns=[product_col])
-        summary = summary.rename(columns={cost_col: 'total_cost'})
+        cost_sum = cost_sum.rename(columns={product_col: 'product', cost_col: 'total_cost'})
+        summary = summary.merge(cost_sum, on='product', how='left')
     
     if 'total_revenue' in summary.columns and 'total_cost' in summary.columns:
         summary['profit'] = summary['total_revenue'].fillna(0) - summary['total_cost'].fillna(0)

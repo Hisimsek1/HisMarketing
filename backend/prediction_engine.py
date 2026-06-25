@@ -53,7 +53,7 @@ class PredictionEngine:
         df_features['month'] = df_features[date_col].dt.month
         df_features['day'] = df_features[date_col].dt.day
         df_features['day_of_week'] = df_features[date_col].dt.dayofweek
-        df_features['week_of_year'] = df_features[date_col].dt.isocalendar().week
+        df_features['week_of_year'] = df_features[date_col].dt.isocalendar().week.astype('int64')
         df_features['quarter'] = df_features[date_col].dt.quarter
         
         # Hafta sonu / hafta içi
@@ -302,7 +302,8 @@ class PredictionEngine:
         Returns:
             Tahmin sonuçları
         """
-        # Özellikleri hazırla
+        # Özellikleri hazırla (orijinal DataFrame'i değiştirmemek için kopyala)
+        df = df.copy()
         df['product'] = df[product_col]
         df['date'] = pd.to_datetime(df[date_col])
         df['quantity'] = pd.to_numeric(df[quantity_col], errors='coerce').fillna(0)
@@ -477,6 +478,6 @@ class PredictionEngine:
         
         # Önceliklere göre sırala (high -> medium -> low)
         priority_order = {'high': 0, 'medium': 1, 'low': 2}
-        recommendations.sort(key=lambda x: (priority_order[x['priority']], abs(x['change_percentage'])), reverse=True)
+        recommendations.sort(key=lambda x: (priority_order[x['priority']], -abs(x['change_percentage'])))
         
         return recommendations[:15]  # İlk 15 öneri

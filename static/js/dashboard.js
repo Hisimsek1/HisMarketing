@@ -4,6 +4,21 @@ let currentData = null;
 let currentAnalysis = null;
 let currentPrediction = null;
 
+// Chart instance registry — destroy before recreating to avoid Canvas-in-use errors
+const chartInstances = {};
+
+function getOrDestroyChart(canvasId) {
+    if (chartInstances[canvasId]) {
+        chartInstances[canvasId].destroy();
+        delete chartInstances[canvasId];
+    }
+    return document.getElementById(canvasId);
+}
+
+function registerChart(canvasId, chartInstance) {
+    chartInstances[canvasId] = chartInstance;
+}
+
 // Check authentication on load
 document.addEventListener('DOMContentLoaded', function() {
     const token = localStorage.getItem('userToken');
@@ -255,9 +270,9 @@ function showAnalysisResults(data) {
 }
 
 function createSalesTrendChart(monthlyData) {
-    const ctx = document.getElementById('salesTrendChart');
-    
-    new Chart(ctx, {
+    const ctx = getOrDestroyChart('salesTrendChart');
+
+    registerChart('salesTrendChart', new Chart(ctx, {
         type: 'line',
         data: {
             labels: monthlyData.map(d => d.month),
@@ -289,15 +304,15 @@ function createSalesTrendChart(monthlyData) {
                 }
             }
         }
-    });
+    }));
 }
 
 function createProductProfitChart(productData) {
-    const ctx = document.getElementById('productProfitChart');
-    
+    const ctx = getOrDestroyChart('productProfitChart');
+
     const top10 = productData.slice(0, 10);
-    
-    new Chart(ctx, {
+
+    registerChart('productProfitChart', new Chart(ctx, {
         type: 'bar',
         data: {
             labels: top10.map(p => p.product),
@@ -325,8 +340,7 @@ function createProductProfitChart(productData) {
                     }
                 }
             }
-        }
-    });
+        }));
 }
 
 function createTopProductsTable(products) {
@@ -536,9 +550,9 @@ function createVisualAnalysis(predictions, futureMonths) {
     
     // Create Bar Chart with Line overlay
     setTimeout(() => {
-        const barCtx = document.getElementById('monthlyBarChart');
+        const barCtx = getOrDestroyChart('monthlyBarChart');
         if (barCtx) {
-            new Chart(barCtx, {
+            registerChart('monthlyBarChart', new Chart(barCtx, {
                 type: 'bar',
                 data: {
                     labels: monthLabels,
@@ -627,18 +641,18 @@ function createVisualAnalysis(predictions, futureMonths) {
                         }
                     }
                 }
-            });
+            }));
         }
-        
+
         // Create Donut Chart
-        const donutCtx = document.getElementById('productDonutChart');
+        const donutCtx = getOrDestroyChart('productDonutChart');
         if (donutCtx) {
             const colors = [
                 '#0a2463', '#2563eb', '#3b5998', '#60a5fa',
                 '#93c5fd', '#3e92cc', '#1e3a8a', '#1e40af'
             ];
-            
-            new Chart(donutCtx, {
+
+            registerChart('productDonutChart', new Chart(donutCtx, {
                 type: 'doughnut',
                 data: {
                     labels: productTotals.map(p => p.product),
@@ -702,10 +716,11 @@ function createVisualAnalysis(predictions, futureMonths) {
                         }
                     }
                 }
-            });
+            }));
         }
     }, 100);
 }
+
 function createPredictionTable(predictions, futureMonths) {
     const container = document.getElementById('predictionTable');
     
@@ -735,7 +750,7 @@ function createPredictionTable(predictions, futureMonths) {
 }
 
 function createPredictionChart(predictions, futureMonths) {
-    const ctx = document.getElementById('predictionChart');
+    const ctx = getOrDestroyChart('predictionChart');
     
     // Get month names
     const monthLabels = futureMonths ? futureMonths.map(m => m.month_name) : 
@@ -752,7 +767,7 @@ function createPredictionChart(predictions, futureMonths) {
         };
     });
     
-    new Chart(ctx, {
+    registerChart('predictionChart', new Chart(ctx, {
         type: 'line',
         data: {
             labels: monthLabels,
@@ -781,7 +796,7 @@ function createPredictionChart(predictions, futureMonths) {
                 }
             }
         }
-    });
+    }));
 }
 
 function showRecommendations(recommendations) {
