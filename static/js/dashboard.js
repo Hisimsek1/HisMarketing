@@ -54,6 +54,7 @@ function showPage(pageName) {
         'analysis': 'analysisPage',
         'prediction': 'predictionPage',
         'reports': 'reportsPage',
+        'compare': 'comparePage',
         'alerts': 'alertsPage',
         'profile': 'profilePage',
     };
@@ -65,6 +66,8 @@ function showPage(pageName) {
 
     if (pageName === 'alerts') loadAlerts();
     if (pageName === 'profile') loadProfile();
+    if (pageName === 'compare') initComparePage();
+    if (pageName === 'reports') {} // no action needed
 }
 
 function setupFileUpload() {
@@ -1095,6 +1098,170 @@ async function changePassword() {
         }
     } catch (e) {
         msgEl.innerHTML = '<span style="color:#ef4444;">Sunucu hatası.</span>';
+    }
+}
+
+// ===== PERIOD COMPARISON =====
+
+let compareChartInstance = null;
+
+function initComparePage() {
+    // Önceki analizden tarih aralığını otomatik doldur
+    if (currentAnalysis && currentAnalysis.monthly_sales && currentAnalysis.monthly_sales.length >= 2) {
+        const months = currentAnalysis.monthly_sales.map(m => m.month).sort();
+        const mid = Math.floor(months.length / 2);
+        document.getElementById('p1Start').value = months[0] + '-01';
+        document.getElementById('p1End').value = months[mid - 1] + '-28';
+        document.getElementById('p2Start').value = months[mid] + '-01';
+        document.getElementById('p2End').value = months[months.length - 1] + '-28';
+    }
+}
+
+async function runComparison() {
+    const token = localStorage.getItem('userToken');
+    if (!currentData) { alert('Önce veri yükleyin.'); return; }
+
+    const p1Start = document.getElementById('p1Start').value;
+    const p1End = document.getElementById('p1End').value;
+    const p2Start = document.getElementById('p2Start').value;
+    const p2End = document.getElementById('p2End').value;
+
+    if (!p1Start || !p1End || !p2Start || !p2End) {
+        alert('Lütfen tüm tarihleri girin.');
+        return;
+    }
+
+    try {
+        const res = await fetch('/api/data/compare', {
+            method: 'POST',
+            headers: {
+                'Authorization': 'Bearer ' + token,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                file_id: currentData.file_id,
+                period1_start: p1Start,
+                period1_end: p1End,
+                period2_start: p2Start,
+                period2_end: p2End,
+            }),
+        });
+        const data = await res.json();
+        if (!data.success) { alert(data.message); return; }
+        renderComparison(data);
+    } catch (e) {
+        console.error('Comparison error:', e);
+        alert('Karşılaştırma sırasında hata oluştu.');
+    }
+}
+
+function renderComparison(data) {
+    document.getElementById('compareResults').style.display = 'block';
+
+    const p1 = data.period1;
+    const p2 = data.period2;
+    const ch = data.changes;
+
+    function arrow(pct) {
+        if (pct === null || pct === undefined) return '';
+        return pct >= 0
+            ? `<span style="color:#10b981;">▲ %${Math.abs(pct)}</span>`
+            : `<span style="color:#ef4444;">▼ %${Math.abs(pct)}</span>`;
+    }
+
+    const statsEl = document.getElementById('compareStats');
+    statsEl.innerHTML = `
+        <div class="stat-card">
+            <div class="stat-icon revenue"><i class="fas fa-boxes"></i></div>
+            <div class="stat-content">
+                <h3>Satış Adedi</h3>
+                <p class="stat-value">${p1.total_quantity.toLocaleString()} → ${p2.total_quantity.toLocaleString()}</p>
+                <small>${arrow(ch.quantity_pct)}</small>
+            </div>
+        </div>
+        ${p1.total_revenue !== undefined ? `
+        <div class="stat-card">
+            <div class="stat-icon profit"><i class="fas fa-dollar-sign"></i></div>
+            <div class="stat-content">
+                <h3>Toplam Gelir</h3>
+                <p class="stat-value">${formatCurrency(p1.total_revenue)} → ${formatCurrency(p2.total_revenue)}</p>
+                <small>${arrow(ch.revenue_pct)}</small>
+            </div>
+        </div>` : ''}
+        <div class="stat-card">
+            <div class="stat-icon products"><i class="fas fa-calendar-alt"></i></div>
+            <div class="stat-content">
+                <h3>Dönem 1</h3>
+                <p class="stat-value" style="font-size:13px;">${p1.label}</p>
+                <small>${p1.row_count.toLocaleString()} kayıt</small>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon expense"><i class="fas fa-calendar-alt"></i></div>
+            <div class="stat-content">
+                <h3>Dönem 2</h3>
+                <p class="stat-value" style="font-size:13px;">${p2.label}</p>
+                <small>${p2.row_count.toLocaleString()} kayıt</small>
+            </div>
+        </div>
+    `;
+
+    // Chart
+    const ctx = document.getElementById('compareChart');
+    if (compareChartInstance) { compareChartInstance.destroy(); }
+
+    const labels1 = (data.monthly_period1 || []).map(r => r.month);
+    const labels2 = (data.monthly_period2 || []).map(r => r.month);
+    const allLabels = [...new Set([...labels1, ...labels2])].sort();
+
+    const vals1 = allLabels.map(l => {
+        const row = (data.monthly_period1 || []).find(r => r.month === l);
+        return row ? row.period1 : 0;
+    });
+    const vals2 = allLabels.map(l => {
+        const row = (data.monthly_period2 || []).find(r => r.month === l);
+        return row ? row.period2 : 0;
+    });
+
+    compareChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: allLabels,
+            datasets: [
+                { label: p1.label, data: vals1, backgroundColor: '#2563eb99', borderColor: '#2563eb', borderWidth: 1 },
+                { label: p2.label, data: vals2, backgroundColor: '#7c3aed99', borderColor: '#7c3aed', borderWidth: 1 },
+            ],
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { position: 'bottom' } },
+            scales: { y: { beginAtZero: true } },
+        },
+    });
+
+    // Product table
+    const products = data.products || [];
+    if (products.length) {
+        let html = `<table><thead><tr>
+            <th>Ürün</th>
+            <th>${p1.label}</th>
+            <th>${p2.label}</th>
+            <th>Değişim</th>
+        </tr></thead><tbody>`;
+        products.forEach(p => {
+            const pct = p.change_pct;
+            const pctHtml = pct === null ? '-'
+                : pct >= 0 ? `<span style="color:#10b981;">▲ %${Math.abs(pct)}</span>`
+                : `<span style="color:#ef4444;">▼ %${Math.abs(pct)}</span>`;
+            html += `<tr>
+                <td><strong>${p.product}</strong></td>
+                <td>${p.period1_qty.toLocaleString()}</td>
+                <td>${p.period2_qty.toLocaleString()}</td>
+                <td>${pctHtml}</td>
+            </tr>`;
+        });
+        html += '</tbody></table>';
+        document.getElementById('compareProductTable').innerHTML = html;
     }
 }
 

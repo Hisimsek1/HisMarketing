@@ -444,6 +444,121 @@ def download_excel(user_email):
         return jsonify({'success': False, 'message': f'İndirme hatası: {str(e)}'}), 500
 
 
+# ===== PERIOD COMPARISON API =====
+
+@app.route('/api/data/compare', methods=['POST'])
+@require_auth
+def compare_periods(user_email):
+    """
+    İki dönem arasında satış karşılaştırması yap.
+    Body: { file_id, period1_start, period1_end, period2_start, period2_end }
+    Tarihler ISO format: 'YYYY-MM-DD'
+    """
+    try:
+        body = request.json
+        file_id = body.get('file_id')
+
+        if not file_id or user_email not in user_files or file_id not in user_files[user_email]:
+            return jsonify({'success': False, 'message': 'Dosya bulunamadı'}), 404
+
+        file_data = user_files[user_email][file_id]
+        if 'df' not in file_data:
+            return jsonify({'success': False, 'message': 'Önce veri analizi yapın'}), 400
+
+        df = file_data['df'].copy()
+        di = file_data['data_intelligence']
+
+        date_col = di.get_column('date')
+        quantity_col = di.get_column('quantity')
+        revenue_col = di.get_column('revenue')
+        product_col = di.get_column('product')
+
+        if not date_col or not quantity_col:
+            return jsonify({'success': False, 'message': 'Tarih veya miktar sütunu bulunamadı'}), 400
+
+        df[date_col] = pd.to_datetime(df[date_col], errors='coerce')
+        df = df.dropna(subset=[date_col])
+
+        p1_start = pd.to_datetime(body.get('period1_start'))
+        p1_end = pd.to_datetime(body.get('period1_end'))
+        p2_start = pd.to_datetime(body.get('period2_start'))
+        p2_end = pd.to_datetime(body.get('period2_end'))
+
+        mask1 = (df[date_col] >= p1_start) & (df[date_col] <= p1_end)
+        mask2 = (df[date_col] >= p2_start) & (df[date_col] <= p2_end)
+
+        df1 = df[mask1]
+        df2 = df[mask2]
+
+        def period_stats(dff):
+            stats = {
+                'total_quantity': float(dff[quantity_col].sum()),
+                'avg_quantity': float(dff[quantity_col].mean()) if len(dff) else 0,
+                'row_count': int(len(dff)),
+            }
+            if revenue_col and revenue_col in dff.columns:
+                stats['total_revenue'] = float(dff[revenue_col].sum())
+            return stats
+
+        stats1 = period_stats(df1)
+        stats2 = period_stats(df2)
+
+        def pct_change(old, new):
+            if old == 0:
+                return None
+            return round((new - old) / old * 100, 1)
+
+        comparison = {
+            'period1': {'label': f"{p1_start.strftime('%d.%m.%Y')} - {p1_end.strftime('%d.%m.%Y')}", **stats1},
+            'period2': {'label': f"{p2_start.strftime('%d.%m.%Y')} - {p2_end.strftime('%d.%m.%Y')}", **stats2},
+            'changes': {
+                'quantity_pct': pct_change(stats1['total_quantity'], stats2['total_quantity']),
+                'revenue_pct': pct_change(
+                    stats1.get('total_revenue', 0), stats2.get('total_revenue', 0)
+                ) if 'total_revenue' in stats1 else None,
+            },
+        }
+
+        # Ürün bazlı karşılaştırma
+        if product_col:
+            prod1 = df1.groupby(product_col)[quantity_col].sum().rename('p1')
+            prod2 = df2.groupby(product_col)[quantity_col].sum().rename('p2')
+            prod_df = pd.concat([prod1, prod2], axis=1).fillna(0)
+            prod_df['change_pct'] = prod_df.apply(
+                lambda r: pct_change(r['p1'], r['p2']), axis=1
+            )
+            prod_df = prod_df.reset_index()
+            comparison['products'] = [
+                {
+                    'product': str(row[product_col]),
+                    'period1_qty': int(row['p1']),
+                    'period2_qty': int(row['p2']),
+                    'change_pct': row['change_pct'],
+                }
+                for _, row in prod_df.nlargest(20, 'p2').iterrows()
+            ]
+
+        # Aylık trend karşılaştırması
+        def monthly_series(dff, label):
+            dff = dff.copy()
+            dff['ym'] = dff[date_col].dt.to_period('M').astype(str)
+            g = dff.groupby('ym')[quantity_col].sum().reset_index()
+            g.columns = ['month', label]
+            return g
+
+        m1 = monthly_series(df1, 'period1')
+        m2 = monthly_series(df2, 'period2')
+        comparison['monthly_period1'] = m1.to_dict(orient='records')
+        comparison['monthly_period2'] = m2.to_dict(orient='records')
+
+        return jsonify({'success': True, **comparison})
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 # ===== ALERTS API =====
 
 @app.route('/api/alerts/thresholds', methods=['POST'])

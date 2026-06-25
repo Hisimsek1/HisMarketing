@@ -33,6 +33,10 @@
                 <i class="fas fa-file-pdf"></i>
                 <span>Raporlar</span>
             </a>
+            <a href="#" class="nav-item" data-page="compare">
+                <i class="fas fa-balance-scale"></i>
+                <span>Karşılaştır</span>
+            </a>
             <a href="#" class="nav-item" data-page="alerts">
                 <i class="fas fa-bell"></i>
                 <span>Uyarılar</span>
@@ -265,6 +269,63 @@
                     <button class="btn btn-primary" onclick="downloadPDF('analysis')">
                         <i class="fas fa-download"></i> PDF İndir
                     </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Compare Page -->
+        <div id="comparePage" class="page">
+            <div class="page-header">
+                <h1>Dönem Karşılaştırması</h1>
+                <p>İki farklı dönemi satış ve gelir açısından karşılaştırın</p>
+            </div>
+
+            <div class="table-card" style="margin-bottom:24px;">
+                <div class="table-header"><h3>Dönem Seçimi</h3></div>
+                <div class="compare-form" style="padding:20px;display:grid;grid-template-columns:1fr 1fr;gap:24px;">
+                    <div>
+                        <h4 style="margin:0 0 12px;color:#2563eb;">Dönem 1</h4>
+                        <div class="form-group">
+                            <label>Başlangıç</label>
+                            <input type="date" id="p1Start" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label>Bitiş</label>
+                            <input type="date" id="p1End" class="form-input">
+                        </div>
+                    </div>
+                    <div>
+                        <h4 style="margin:0 0 12px;color:#7c3aed;">Dönem 2</h4>
+                        <div class="form-group">
+                            <label>Başlangıç</label>
+                            <input type="date" id="p2Start" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label>Bitiş</label>
+                            <input type="date" id="p2End" class="form-input">
+                        </div>
+                    </div>
+                </div>
+                <div style="padding:0 20px 20px;">
+                    <button class="btn btn-primary" onclick="runComparison()">
+                        <i class="fas fa-exchange-alt"></i> Karşılaştır
+                    </button>
+                </div>
+            </div>
+
+            <div id="compareResults" style="display:none;">
+                <div class="stats-grid" id="compareStats"></div>
+
+                <div class="charts-container" style="margin-top:24px;">
+                    <div class="chart-card">
+                        <h3>Aylık Satış Karşılaştırması</h3>
+                        <canvas id="compareChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="table-card" style="margin-top:24px;">
+                    <div class="table-header"><h3>Ürün Bazlı Karşılaştırma</h3></div>
+                    <div id="compareProductTable" class="table-container"></div>
                 </div>
             </div>
         </div>
