@@ -15,6 +15,7 @@ import functools
 from backend.data_intelligence import DataIntelligence
 from backend.prediction_engine import PredictionEngine
 from backend.external_data import ExternalDataProvider
+from backend.pdf_report import generate_analysis_pdf, generate_prediction_pdf
 from backend.utils import (
     generate_file_id, generate_user_token, hash_password, verify_password,
     allowed_file, read_data_file, save_user_data, load_user_data,
@@ -375,25 +376,25 @@ def download_pdf(user_email):
     """PDF raporu indir"""
     try:
         report_type = request.args.get('type', 'analysis')
-        
-        # Basit PDF oluşturma (gerçek uygulamada ReportLab kullanılır)
-        # Şimdilik JSON olarak döndür
         data = load_user_data(user_email, report_type)
-        
+
         if not data:
             return jsonify({'success': False, 'message': 'Rapor bulunamadı'}), 404
-        
-        # JSON dosyası olarak indir
-        import io
-        output = io.BytesIO()
-        output.write(json.dumps(data, cls=NumpyEncoder, indent=2, ensure_ascii=False).encode('utf-8'))
-        output.seek(0)
-        
+
+        user_info = users_db.get(user_email, {})
+        user_name = user_info.get('name', '')
+        company = user_info.get('company', '')
+
+        if report_type == 'analysis':
+            pdf_buffer = generate_analysis_pdf(data, user_name=user_name, company=company)
+        else:
+            pdf_buffer = generate_prediction_pdf(data, user_name=user_name, company=company)
+
         return send_file(
-            output,
+            pdf_buffer,
             as_attachment=True,
-            download_name=f'hismarketing_{report_type}_raporu.json',
-            mimetype='application/json'
+            download_name=f'hismarketing_{report_type}_raporu.pdf',
+            mimetype='application/pdf'
         )
         
     except Exception as e:
