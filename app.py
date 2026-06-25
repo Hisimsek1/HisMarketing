@@ -746,6 +746,75 @@ def change_password(user_email):
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
+# ===== VERİ GEÇMİŞİ API =====
+
+@app.route('/api/history/list', methods=['GET'])
+@require_auth
+def list_history(user_email):
+    """Kullanıcının tüm kayıtlı analiz ve tahmin geçmişini listele"""
+    try:
+        import hashlib as _hl
+        user_dir = os.path.join('user_data', _hl.md5(user_email.encode()).hexdigest())
+        if not os.path.exists(user_dir):
+            return jsonify({'success': True, 'history': []})
+
+        history = []
+        for fname in sorted(os.listdir(user_dir), reverse=True):
+            if not fname.endswith('.json'):
+                continue
+            parts = fname[:-5].rsplit('_', 2)
+            if len(parts) < 3:
+                continue
+            data_type = parts[0]
+            if data_type not in ('analysis', 'prediction'):
+                continue
+            try:
+                date_str = parts[1]
+                time_str = parts[2]
+                dt = datetime.strptime(f"{date_str}_{time_str}", '%Y%m%d_%H%M%S')
+                display_date = dt.strftime('%d.%m.%Y %H:%M')
+            except Exception:
+                display_date = fname
+
+            fpath = os.path.join(user_dir, fname)
+            size_kb = round(os.path.getsize(fpath) / 1024, 1)
+
+            history.append({
+                'filename': fname,
+                'type': data_type,
+                'display_date': display_date,
+                'size_kb': size_kb,
+            })
+
+        return jsonify({'success': True, 'history': history[:50]})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/history/load', methods=['GET'])
+@require_auth
+def load_history_entry(user_email):
+    """Belirli bir geçmiş dosyasını yükle"""
+    try:
+        import hashlib as _hl
+        filename = request.args.get('filename', '')
+        if not filename or '..' in filename or '/' in filename or '\\' in filename:
+            return jsonify({'success': False, 'message': 'Geçersiz dosya adı'}), 400
+
+        user_dir = os.path.join('user_data', _hl.md5(user_email.encode()).hexdigest())
+        fpath = os.path.join(user_dir, filename)
+
+        if not os.path.exists(fpath):
+            return jsonify({'success': False, 'message': 'Dosya bulunamadı'}), 404
+
+        with open(fpath, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+
+        return jsonify({'success': True, 'data': data, 'filename': filename})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 # ===== KAR MARJI ANALİZİ API =====
 
 @app.route('/api/data/margin-analysis', methods=['POST'])

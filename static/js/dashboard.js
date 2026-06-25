@@ -71,6 +71,7 @@ function showPage(pageName) {
         'reports': 'reportsPage',
         'compare': 'comparePage',
         'alerts': 'alertsPage',
+        'history': 'historyPage',
         'margin': 'marginPage',
         'eoq': 'eoqPage',
         'abc': 'abcPage',
@@ -85,6 +86,7 @@ function showPage(pageName) {
     if (pageName === 'alerts') loadAlerts();
     if (pageName === 'profile') loadProfile();
     if (pageName === 'compare') initComparePage();
+    if (pageName === 'history') loadHistory();
     if (pageName === 'reports') {} // no action needed
 }
 
@@ -1300,6 +1302,112 @@ function setupSearchInputs() {
     }
     bindSearch('productSearchAnalysis', 'topProductsTable');
     bindSearch('productSearchPrediction', 'predictionTable');
+}
+
+// ===== GEÇMİŞ =====
+
+async function loadHistory() {
+    const token = localStorage.getItem('userToken');
+    const content = document.getElementById('historyContent');
+    content.innerHTML = '<div style="text-align:center;padding:30px;"><i class="fas fa-spinner fa-spin" style="font-size:2rem;color:#2563eb;"></i><p style="margin-top:12px;">Geçmiş yükleniyor...</p></div>';
+
+    try {
+        const res = await fetch('/api/history/list', {
+            headers: { 'Authorization': 'Bearer ' + token }
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message);
+
+        if (!data.history || data.history.length === 0) {
+            content.innerHTML = `<div class="info-card" style="text-align:center;padding:40px;">
+                <i class="fas fa-folder-open" style="font-size:3rem;color:#94a3b8;margin-bottom:16px;"></i>
+                <h3 style="color:#64748b;">Henüz analiz geçmişi yok</h3>
+                <p style="color:#94a3b8;">Veri yükleyip analiz/tahmin yaptıktan sonra burada görünür.</p>
+            </div>`;
+            return;
+        }
+
+        const typeLabels = { analysis: 'Analiz', prediction: 'Tahmin' };
+        const typeColors = { analysis: '#2563eb', prediction: '#10b981' };
+        const typeIcons = { analysis: 'fa-chart-bar', prediction: 'fa-brain' };
+
+        let html = `<div class="card"><h3 style="margin-bottom:16px;">${data.history.length} Kayıt Bulundu</h3>
+            <div style="overflow-x:auto;"><table>
+                <thead><tr><th>Tür</th><th>Tarih</th><th>Boyut</th><th>İşlem</th></tr></thead>
+                <tbody>`;
+
+        data.history.forEach((item, i) => {
+            const color = typeColors[item.type] || '#64748b';
+            const icon = typeIcons[item.type] || 'fa-file';
+            const label = typeLabels[item.type] || item.type;
+            html += `<tr style="background:${i%2===0?'#fff':'#f8fafc'}">
+                <td><span style="background:${color}20;color:${color};padding:4px 12px;border-radius:20px;font-weight:600;font-size:.85rem;">
+                    <i class="fas ${icon}"></i> ${label}
+                </span></td>
+                <td>${item.display_date}</td>
+                <td>${item.size_kb} KB</td>
+                <td>
+                    <button onclick="viewHistoryEntry('${item.filename}','${item.type}')"
+                        style="background:${color};color:#fff;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:.85rem;">
+                        <i class="fas fa-eye"></i> Görüntüle
+                    </button>
+                </td>
+            </tr>`;
+        });
+
+        html += '</tbody></table></div></div>';
+        html += '<div id="historyDetail" style="margin-top:20px;"></div>';
+        content.innerHTML = html;
+    } catch (err) {
+        content.innerHTML = `<div class="alert-item critical"><i class="fas fa-exclamation-circle"></i> Hata: ${err.message}</div>`;
+    }
+}
+
+async function viewHistoryEntry(filename, type) {
+    const token = localStorage.getItem('userToken');
+    const detail = document.getElementById('historyDetail');
+    if (!detail) return;
+    detail.innerHTML = '<div style="text-align:center;padding:20px;"><i class="fas fa-spinner fa-spin" style="color:#2563eb;"></i> Yükleniyor...</div>';
+
+    try {
+        const res = await fetch(`/api/history/load?filename=${encodeURIComponent(filename)}`, {
+            headers: { 'Authorization': 'Bearer ' + token }
+        });
+        const resp = await res.json();
+        if (!res.ok) throw new Error(resp.message);
+        const data = resp.data;
+
+        let html = `<div class="card"><h3 style="margin-bottom:16px;"><i class="fas fa-file-alt"></i> ${filename}</h3>`;
+
+        if (type === 'analysis') {
+            html += `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;">
+                <div class="stat-card"><div class="stat-label">Toplam Gelir</div><div class="stat-value">${formatCurrency(data.total_revenue||0)}</div></div>
+                <div class="stat-card"><div class="stat-label">Gider</div><div class="stat-value">${formatCurrency(data.total_expense||0)}</div></div>
+                <div class="stat-card"><div class="stat-label">Net Kâr</div><div class="stat-value">${formatCurrency(data.net_profit||0)}</div></div>
+                <div class="stat-card"><div class="stat-label">Ürün Sayısı</div><div class="stat-value">${data.product_count||0}</div></div>
+            </div>`;
+        } else if (type === 'prediction') {
+            const preds = data.predictions || [];
+            html += `<p style="margin-bottom:12px;color:#64748b;">Model doğruluğu: <strong>${data.accuracy}%</strong> — ${preds.length} ürün tahmini</p>
+                <table><thead><tr><th>Ürün</th><th>Toplam Tahmin</th><th>Doğruluk</th></tr></thead><tbody>`;
+            preds.slice(0, 10).forEach((p, i) => {
+                html += `<tr style="background:${i%2===0?'#fff':'#f8fafc'}">
+                    <td>${p.product}</td>
+                    <td>${Math.round(p.total_predicted).toLocaleString()}</td>
+                    <td>%${p.accuracy?.toFixed(1)||'—'}</td>
+                </tr>`;
+            });
+            html += '</tbody></table>';
+        }
+
+        html += `<button onclick="document.getElementById('historyDetail').innerHTML=''"
+            style="margin-top:16px;background:#f1f5f9;color:#475569;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;">
+            <i class="fas fa-times"></i> Kapat
+        </button></div>`;
+        detail.innerHTML = html;
+    } catch (err) {
+        detail.innerHTML = `<div class="alert-item critical">Hata: ${err.message}</div>`;
+    }
 }
 
 // ===== KAR MARJI ANALİZİ =====
