@@ -18,10 +18,11 @@ document.addEventListener('DOMContentLoaded', function() {
     // Set user info
     document.getElementById('userName').textContent = userName || 'Kullanıcı';
     document.getElementById('userEmail').textContent = userEmail || 'user@email.com';
-    
+
     // Setup navigation
     setupNavigation();
     setupFileUpload();
+    setupSearchInputs();
 });
 
 function setupNavigation() {
@@ -47,18 +48,23 @@ function setupNavigation() {
 function showPage(pageName) {
     const pages = document.querySelectorAll('.page');
     pages.forEach(page => page.classList.remove('active'));
-    
+
     const pageMap = {
         'upload': 'uploadPage',
         'analysis': 'analysisPage',
         'prediction': 'predictionPage',
-        'reports': 'reportsPage'
+        'reports': 'reportsPage',
+        'alerts': 'alertsPage',
+        'profile': 'profilePage',
     };
-    
+
     const targetPage = document.getElementById(pageMap[pageName]);
     if (targetPage) {
         targetPage.classList.add('active');
     }
+
+    if (pageName === 'alerts') loadAlerts();
+    if (pageName === 'profile') loadProfile();
 }
 
 function setupFileUpload() {
@@ -853,4 +859,260 @@ function handleLogout() {
 function formatCurrency(value) {
     if (value === undefined || value === null) return '₺0';
     return '₺' + value.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// ===== ALERTS =====
+
+let savedThresholds = {};
+
+async function loadAlerts() {
+    const token = localStorage.getItem('userToken');
+
+    // Kaydedilmiş eşikleri yükle
+    try {
+        const tRes = await fetch('/api/alerts/thresholds', {
+            headers: { 'Authorization': 'Bearer ' + token }
+        });
+        const tData = await tRes.json();
+        if (tData.success) savedThresholds = tData.thresholds || {};
+    } catch (_) {}
+
+    // Tahmin verisi üzerinden editor oluştur
+    if (currentPrediction && currentPrediction.predictions) {
+        renderThresholdEditor(currentPrediction.predictions);
+    } else {
+        document.getElementById('thresholdEditor').innerHTML =
+            '<p style="color:#64748b;font-size:13px;">Önce tahmin oluşturun, ardından eşik değerleri ayarlayabilirsiniz.</p>';
+    }
+
+    // Uyarıları kontrol et
+    try {
+        const res = await fetch('/api/alerts/check', {
+            headers: { 'Authorization': 'Bearer ' + token }
+        });
+        const data = await res.json();
+        if (data.success) renderAlerts(data);
+    } catch (e) {
+        console.error('Alerts error:', e);
+    }
+}
+
+function renderThresholdEditor(predictions) {
+    const container = document.getElementById('thresholdEditor');
+    let html = `<table class="threshold-table">
+        <thead><tr>
+            <th>Ürün</th>
+            <th>Mevcut Stok</th>
+            <th>Min. Stok</th>
+            <th>Yeniden Sipariş Noktası</th>
+            <th>Tahmini Ay 1</th>
+        </tr></thead><tbody>`;
+
+    predictions.forEach(pred => {
+        const t = savedThresholds[pred.product] || {};
+        const nextMonth = Math.round(pred.monthly_predictions[0] || 0);
+        html += `<tr data-product="${pred.product}">
+            <td><strong>${pred.product}</strong></td>
+            <td><input type="number" class="th-current" min="0" value="${t.current_stock ?? ''}" placeholder="-"></td>
+            <td><input type="number" class="th-min" min="0" value="${t.min_stock ?? ''}" placeholder="-"></td>
+            <td><input type="number" class="th-reorder" min="0" value="${t.reorder_point ?? ''}" placeholder="-"></td>
+            <td style="color:#2563eb;font-weight:600;">${nextMonth.toLocaleString()}</td>
+        </tr>`;
+    });
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+async function saveThresholds() {
+    const token = localStorage.getItem('userToken');
+    const rows = document.querySelectorAll('#thresholdEditor tbody tr');
+    const thresholds = {};
+
+    rows.forEach(row => {
+        const product = row.dataset.product;
+        const current = row.querySelector('.th-current').value;
+        const min = row.querySelector('.th-min').value;
+        const reorder = row.querySelector('.th-reorder').value;
+        thresholds[product] = {
+            current_stock: current !== '' ? parseInt(current) : null,
+            min_stock: min !== '' ? parseInt(min) : null,
+            reorder_point: reorder !== '' ? parseInt(reorder) : null,
+        };
+    });
+
+    try {
+        const res = await fetch('/api/alerts/thresholds', {
+            method: 'POST',
+            headers: {
+                'Authorization': 'Bearer ' + token,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ thresholds }),
+        });
+        const data = await res.json();
+        if (data.success) {
+            savedThresholds = thresholds;
+            loadAlerts();
+        }
+    } catch (e) {
+        console.error('Save thresholds error:', e);
+    }
+}
+
+function renderAlerts(data) {
+    const summary = data.summary;
+    const alerts = data.alerts;
+
+    document.getElementById('alertsSummary').style.display = 'flex';
+    document.getElementById('criticalCount').textContent = summary.critical;
+    document.getElementById('warningCount').textContent = summary.warning;
+    document.getElementById('okCount').textContent = summary.ok;
+
+    // Sidebar badge
+    const badge = document.getElementById('alertBadge');
+    if (summary.critical > 0 || summary.warning > 0) {
+        badge.textContent = summary.critical + summary.warning;
+        badge.style.display = 'inline-flex';
+    } else {
+        badge.style.display = 'none';
+    }
+
+    const container = document.getElementById('alertsList');
+    if (!alerts.length) {
+        container.innerHTML = '<p style="color:#64748b;">Henüz uyarı bulunmuyor.</p>';
+        return;
+    }
+
+    const icons = { critical: 'exclamation-circle', warning: 'exclamation-triangle', ok: 'check-circle' };
+    let html = '';
+
+    alerts.filter(a => a.level !== 'ok').forEach(a => {
+        const icon = icons[a.level];
+        const msgs = a.messages.length ? a.messages.join(' ') : 'Durum normal.';
+        const demandInfo = `Tahmini talep: Ay 1 = ${a.next_month_demand.toLocaleString()}, 3 Ay = ${a.three_month_demand.toLocaleString()}`;
+        html += `<div class="alert-item ${a.level}">
+            <i class="fas fa-${icon}"></i>
+            <div class="alert-item-content">
+                <div class="alert-item-title">${a.product}</div>
+                <div class="alert-item-body">${msgs}<br><span style="color:#94a3b8;">${demandInfo}</span></div>
+            </div>
+        </div>`;
+    });
+
+    if (!html) html = '<p style="color:#10b981;font-weight:600;">Tüm ürünler normal seviyede.</p>';
+    container.innerHTML = html;
+}
+
+// ===== PROFILE =====
+
+async function loadProfile() {
+    const token = localStorage.getItem('userToken');
+    try {
+        const res = await fetch('/api/profile', {
+            headers: { 'Authorization': 'Bearer ' + token }
+        });
+        const data = await res.json();
+        if (data.success) {
+            document.getElementById('profileName').value = data.name || '';
+            document.getElementById('profileEmail').value = data.email || '';
+            document.getElementById('profileCompany').value = data.company || '';
+            document.getElementById('profileCreatedAt').value = data.created_at
+                ? new Date(data.created_at).toLocaleDateString('tr-TR')
+                : '';
+        }
+    } catch (e) {
+        console.error('Profile load error:', e);
+    }
+}
+
+async function saveProfile() {
+    const token = localStorage.getItem('userToken');
+    const name = document.getElementById('profileName').value.trim();
+    const company = document.getElementById('profileCompany').value.trim();
+
+    if (!name) { alert('İsim boş olamaz.'); return; }
+
+    try {
+        const res = await fetch('/api/profile', {
+            method: 'PUT',
+            headers: {
+                'Authorization': 'Bearer ' + token,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ name, company }),
+        });
+        const data = await res.json();
+        if (data.success) {
+            localStorage.setItem('userName', name);
+            document.getElementById('userName').textContent = name;
+            alert('Profil güncellendi.');
+        } else {
+            alert(data.message || 'Hata oluştu.');
+        }
+    } catch (e) {
+        console.error('Save profile error:', e);
+    }
+}
+
+async function changePassword() {
+    const token = localStorage.getItem('userToken');
+    const current = document.getElementById('currentPassword').value;
+    const newPw = document.getElementById('newPassword').value;
+    const confirm = document.getElementById('confirmPassword').value;
+    const msgEl = document.getElementById('passwordMessage');
+
+    if (!current || !newPw || !confirm) {
+        msgEl.innerHTML = '<span style="color:#ef4444;">Tüm alanları doldurun.</span>';
+        return;
+    }
+    if (newPw !== confirm) {
+        msgEl.innerHTML = '<span style="color:#ef4444;">Şifreler eşleşmiyor.</span>';
+        return;
+    }
+    if (newPw.length < 6) {
+        msgEl.innerHTML = '<span style="color:#ef4444;">Şifre en az 6 karakter olmalı.</span>';
+        return;
+    }
+
+    try {
+        const res = await fetch('/api/profile/change-password', {
+            method: 'POST',
+            headers: {
+                'Authorization': 'Bearer ' + token,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ current_password: current, new_password: newPw }),
+        });
+        const data = await res.json();
+        if (data.success) {
+            msgEl.innerHTML = '<span style="color:#10b981;">Şifre başarıyla değiştirildi.</span>';
+            document.getElementById('currentPassword').value = '';
+            document.getElementById('newPassword').value = '';
+            document.getElementById('confirmPassword').value = '';
+        } else {
+            msgEl.innerHTML = `<span style="color:#ef4444;">${data.message}</span>`;
+        }
+    } catch (e) {
+        msgEl.innerHTML = '<span style="color:#ef4444;">Sunucu hatası.</span>';
+    }
+}
+
+// ===== PRODUCT SEARCH =====
+
+function setupSearchInputs() {
+    function bindSearch(inputId, tableId) {
+        const input = document.getElementById(inputId);
+        if (!input) return;
+        input.addEventListener('input', function () {
+            const query = this.value.toLowerCase().trim();
+            const rows = document.querySelectorAll(`#${tableId} tbody tr`);
+            rows.forEach(row => {
+                const text = row.querySelector('td')?.textContent?.toLowerCase() || '';
+                row.style.display = query === '' || text.includes(query) ? '' : 'none';
+            });
+        });
+    }
+    bindSearch('productSearchAnalysis', 'topProductsTable');
+    bindSearch('productSearchPrediction', 'predictionTable');
 }

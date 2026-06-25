@@ -33,6 +33,15 @@
                 <i class="fas fa-file-pdf"></i>
                 <span>Raporlar</span>
             </a>
+            <a href="#" class="nav-item" data-page="alerts">
+                <i class="fas fa-bell"></i>
+                <span>Uyarılar</span>
+                <span class="alert-badge" id="alertBadge" style="display:none;">!</span>
+            </a>
+            <a href="#" class="nav-item" data-page="profile">
+                <i class="fas fa-user-cog"></i>
+                <span>Profil</span>
+            </a>
         </nav>
         
         <div class="sidebar-footer">
@@ -167,9 +176,12 @@
             <div class="table-card">
                 <div class="table-header">
                     <h3>En Çok Satan Ürünler</h3>
-                    <button class="btn btn-outline" onclick="downloadPDF('analysis')">
-                        <i class="fas fa-file-pdf"></i> PDF İndir
-                    </button>
+                    <div class="search-wrapper">
+                        <input type="text" class="search-input" id="productSearchAnalysis" placeholder="Ürün ara...">
+                        <button class="btn btn-outline" onclick="downloadPDF('analysis')">
+                            <i class="fas fa-file-pdf"></i> PDF İndir
+                        </button>
+                    </div>
                 </div>
                 <div class="table-container" id="topProductsTable"></div>
             </div>
@@ -196,9 +208,12 @@
                 <div class="table-card">
                     <div class="table-header">
                         <h3>6 Aylık Stok Tahmini</h3>
-                        <button class="btn btn-outline" onclick="downloadExcel('prediction')">
-                            <i class="fas fa-file-excel"></i> Excel İndir
-                        </button>
+                        <div class="search-wrapper">
+                            <input type="text" class="search-input" id="productSearchPrediction" placeholder="Ürün ara...">
+                            <button class="btn btn-outline" onclick="downloadExcel('prediction')">
+                                <i class="fas fa-file-excel"></i> Excel İndir
+                            </button>
+                        </div>
                     </div>
                     <div class="table-container" id="predictionTable"></div>
                 </div>
@@ -234,17 +249,122 @@
                     <i class="fas fa-brain"></i>
                     <h3>Tahmin Raporu</h3>
                     <p>6 aylık stok tahminleri ve öneriler</p>
-                    <button class="btn btn-primary" onclick="downloadExcel('prediction')">
-                        <i class="fas fa-download"></i> Excel İndir
-                    </button>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;">
+                        <button class="btn btn-primary" onclick="downloadExcel('prediction')">
+                            <i class="fas fa-file-excel"></i> Excel İndir
+                        </button>
+                        <button class="btn btn-outline" onclick="downloadPDF('prediction')">
+                            <i class="fas fa-file-pdf"></i> PDF İndir
+                        </button>
+                    </div>
                 </div>
                 <div class="report-card">
                     <i class="fas fa-file-alt"></i>
                     <h3>Detaylı Rapor</h3>
                     <p>Tüm analizler ve tahminlerin kapsamlı özeti</p>
-                    <button class="btn btn-primary" onclick="downloadPDF('full')">
+                    <button class="btn btn-primary" onclick="downloadPDF('analysis')">
                         <i class="fas fa-download"></i> PDF İndir
                     </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Alerts Page -->
+        <div id="alertsPage" class="page">
+            <div class="page-header">
+                <h1>Stok Uyarıları</h1>
+                <p>Tahminlere göre kritik ürünler ve stok eşik yönetimi</p>
+            </div>
+
+            <div class="alerts-summary" id="alertsSummary" style="display:none;">
+                <div class="alert-stat critical">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <span id="criticalCount">0</span>
+                    <small>Kritik</small>
+                </div>
+                <div class="alert-stat warning">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span id="warningCount">0</span>
+                    <small>Uyarı</small>
+                </div>
+                <div class="alert-stat ok">
+                    <i class="fas fa-check-circle"></i>
+                    <span id="okCount">0</span>
+                    <small>Normal</small>
+                </div>
+            </div>
+
+            <div class="table-card" style="margin-bottom:24px;">
+                <div class="table-header">
+                    <h3>Stok Eşik Değerleri</h3>
+                    <button class="btn btn-primary" onclick="loadAlerts()">
+                        <i class="fas fa-sync-alt"></i> Kontrol Et
+                    </button>
+                </div>
+                <p style="color:#64748b;font-size:13px;padding:0 16px 12px;">
+                    Ürünleriniz için mevcut stok miktarını, minimum stok ve yeniden sipariş noktasını girin.
+                    Tahminler bu değerlerle karşılaştırılarak uyarı üretilir.
+                </p>
+                <div id="thresholdEditor" style="padding:0 16px 16px;"></div>
+                <div style="padding:0 16px 16px;">
+                    <button class="btn btn-primary" onclick="saveThresholds()">
+                        <i class="fas fa-save"></i> Eşikleri Kaydet
+                    </button>
+                </div>
+            </div>
+
+            <div id="alertsList"></div>
+        </div>
+
+        <!-- Profile Page -->
+        <div id="profilePage" class="page">
+            <div class="page-header">
+                <h1>Profil Ayarları</h1>
+                <p>Hesap bilgilerinizi ve şifrenizi yönetin</p>
+            </div>
+
+            <div class="profile-grid">
+                <div class="profile-card">
+                    <h3><i class="fas fa-user"></i> Profil Bilgileri</h3>
+                    <div class="form-group">
+                        <label>Ad Soyad</label>
+                        <input type="text" id="profileName" class="form-input" placeholder="Adınız">
+                    </div>
+                    <div class="form-group">
+                        <label>E-posta</label>
+                        <input type="email" id="profileEmail" class="form-input" disabled>
+                    </div>
+                    <div class="form-group">
+                        <label>Şirket</label>
+                        <input type="text" id="profileCompany" class="form-input" placeholder="Şirket adı">
+                    </div>
+                    <div class="form-group">
+                        <label>Üyelik Tarihi</label>
+                        <input type="text" id="profileCreatedAt" class="form-input" disabled>
+                    </div>
+                    <button class="btn btn-primary" onclick="saveProfile()">
+                        <i class="fas fa-save"></i> Kaydet
+                    </button>
+                </div>
+
+                <div class="profile-card">
+                    <h3><i class="fas fa-lock"></i> Şifre Değiştir</h3>
+                    <div class="form-group">
+                        <label>Mevcut Şifre</label>
+                        <input type="password" id="currentPassword" class="form-input" placeholder="Mevcut şifreniz">
+                    </div>
+                    <div class="form-group">
+                        <label>Yeni Şifre</label>
+                        <input type="password" id="newPassword" class="form-input" placeholder="En az 6 karakter">
+                    </div>
+                    <div class="form-group">
+                        <label>Yeni Şifre (Tekrar)</label>
+                        <input type="password" id="confirmPassword" class="form-input" placeholder="Şifreyi tekrarlayın">
+                    </div>
+                    <button class="btn btn-primary" onclick="changePassword()">
+                        <i class="fas fa-key"></i> Şifreyi Değiştir
+                    </button>
+                    <div id="passwordMessage" style="margin-top:10px;"></div>
                 </div>
             </div>
         </div>

@@ -444,5 +444,192 @@ def download_excel(user_email):
         return jsonify({'success': False, 'message': f'İndirme hatası: {str(e)}'}), 500
 
 
+# ===== ALERTS API =====
+
+@app.route('/api/alerts/thresholds', methods=['POST'])
+@require_auth
+def save_alert_thresholds(user_email):
+    """Kullanıcı stok eşik değerlerini kaydet"""
+    try:
+        thresholds = request.json.get('thresholds', {})
+        save_user_data(user_email, 'thresholds', thresholds)
+        return jsonify({'success': True, 'message': 'Eşik değerleri kaydedildi'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/alerts/thresholds', methods=['GET'])
+@require_auth
+def get_alert_thresholds(user_email):
+    """Kullanıcının kayıtlı eşik değerlerini getir"""
+    try:
+        thresholds = load_user_data(user_email, 'thresholds') or {}
+        return jsonify({'success': True, 'thresholds': thresholds})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/alerts/check', methods=['GET'])
+@require_auth
+def check_alerts(user_email):
+    """
+    Tahmin verileri ve eşik değerlerine göre stok uyarıları üret.
+    Her ürün için mevcut stok, minimum stok ve yeniden sipariş noktası
+    karşılaştırılır; tahmin edilen tüketim de hesaba katılır.
+    """
+    try:
+        prediction_data = load_user_data(user_email, 'prediction')
+        thresholds = load_user_data(user_email, 'thresholds') or {}
+
+        if not prediction_data:
+            return jsonify({'success': True, 'alerts': [], 'summary': {
+                'total': 0, 'critical': 0, 'warning': 0, 'ok': 0
+            }})
+
+        alerts = []
+        predictions = prediction_data.get('predictions', [])
+
+        for pred in predictions:
+            product = pred['product']
+            monthly_preds = pred.get('monthly_predictions', [])
+            next_month_demand = monthly_preds[0] if monthly_preds else 0
+            three_month_demand = sum(monthly_preds[:3]) if len(monthly_preds) >= 3 else sum(monthly_preds)
+            change_pct = pred.get('metrics', {}).get('change_percentage', 0)
+
+            threshold = thresholds.get(product, {})
+            current_stock = threshold.get('current_stock', None)
+            min_stock = threshold.get('min_stock', None)
+            reorder_point = threshold.get('reorder_point', None)
+
+            alert = {
+                'product': product,
+                'next_month_demand': round(next_month_demand),
+                'three_month_demand': round(three_month_demand),
+                'current_stock': current_stock,
+                'min_stock': min_stock,
+                'reorder_point': reorder_point,
+                'accuracy': pred.get('accuracy', 0),
+                'level': 'ok',
+                'messages': [],
+            }
+
+            # Eşik değerleri ayarlanmışsa kontrol et
+            if current_stock is not None:
+                if reorder_point is not None and current_stock <= reorder_point:
+                    alert['level'] = 'critical'
+                    alert['messages'].append(
+                        f'Stok ({current_stock}) yeniden sipariş noktasının ({reorder_point}) altında!'
+                    )
+                elif min_stock is not None and current_stock <= min_stock:
+                    alert['level'] = 'critical'
+                    alert['messages'].append(
+                        f'Stok ({current_stock}) minimum seviyenin ({min_stock}) altında!'
+                    )
+                elif next_month_demand > 0 and current_stock < next_month_demand:
+                    alert['level'] = 'warning'
+                    alert['messages'].append(
+                        f'Mevcut stok ({current_stock}) önümüzdeki ay tahmini talebini ({round(next_month_demand)}) karşılamaya yetmeyebilir.'
+                    )
+                else:
+                    alert['level'] = 'ok'
+            else:
+                # Eşik yok — sadece yüksek değişim varsa uyar
+                priority = next(
+                    (p.get('priority') for p in prediction_data.get('recommendations', [])
+                     if p.get('product') == product),
+                    'low'
+                )
+                if priority == 'high':
+                    alert['level'] = 'warning'
+                    alert['messages'].append('Yüksek talep değişimi tespit edildi. Stok eşiği ayarlamanız önerilir.')
+
+            alerts.append(alert)
+
+        # Sırala: critical > warning > ok
+        order = {'critical': 0, 'warning': 1, 'ok': 2}
+        alerts.sort(key=lambda a: order[a['level']])
+
+        summary = {
+            'total': len(alerts),
+            'critical': sum(1 for a in alerts if a['level'] == 'critical'),
+            'warning': sum(1 for a in alerts if a['level'] == 'warning'),
+            'ok': sum(1 for a in alerts if a['level'] == 'ok'),
+        }
+
+        return jsonify({'success': True, 'alerts': alerts, 'summary': summary})
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+# ===== PROFILE API =====
+
+@app.route('/api/profile', methods=['GET'])
+@require_auth
+def get_profile(user_email):
+    """Kullanıcı profilini getir"""
+    try:
+        user = users_db.get(user_email, {})
+        return jsonify({
+            'success': True,
+            'name': user.get('name', ''),
+            'email': user_email,
+            'company': user.get('company', ''),
+            'created_at': user.get('created_at', ''),
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/profile', methods=['PUT'])
+@require_auth
+def update_profile(user_email):
+    """Kullanıcı profilini güncelle"""
+    try:
+        data = request.json
+        name = data.get('name', '').strip()
+        company = data.get('company', '').strip()
+
+        if not name:
+            return jsonify({'success': False, 'message': 'İsim boş olamaz'}), 400
+
+        users_db[user_email]['name'] = name
+        users_db[user_email]['company'] = company
+        save_users_db(users_db)
+
+        return jsonify({'success': True, 'message': 'Profil güncellendi'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/profile/change-password', methods=['POST'])
+@require_auth
+def change_password(user_email):
+    """Şifre değiştir"""
+    try:
+        data = request.json
+        current_password = data.get('current_password', '')
+        new_password = data.get('new_password', '')
+
+        if not current_password or not new_password:
+            return jsonify({'success': False, 'message': 'Tüm alanları doldurun'}), 400
+
+        if len(new_password) < 6:
+            return jsonify({'success': False, 'message': 'Yeni şifre en az 6 karakter olmalı'}), 400
+
+        user = users_db.get(user_email)
+        if not verify_password(current_password, user['password']):
+            return jsonify({'success': False, 'message': 'Mevcut şifre hatalı'}), 401
+
+        users_db[user_email]['password'] = hash_password(new_password)
+        save_users_db(users_db)
+
+        return jsonify({'success': True, 'message': 'Şifre başarıyla değiştirildi'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
