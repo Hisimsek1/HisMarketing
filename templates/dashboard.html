@@ -37,6 +37,10 @@
                 <i class="fas fa-balance-scale"></i>
                 <span>Karşılaştır</span>
             </a>
+            <a href="#" class="nav-item" data-page="abc">
+                <i class="fas fa-layer-group"></i>
+                <span>ABC Analizi</span>
+            </a>
             <a href="#" class="nav-item" data-page="alerts">
                 <i class="fas fa-bell"></i>
                 <span>Uyarılar</span>
@@ -375,6 +379,25 @@
             </div>
 
             <div id="alertsList"></div>
+        </div>
+
+        <!-- ABC Analysis Page -->
+        <div id="abcPage" class="page">
+            <div class="page-header">
+                <h1>ABC Ürün Analizi</h1>
+                <p>Ürünleri gelir katkısına göre A/B/C kategorilerine ayırın</p>
+            </div>
+
+            <div id="abcContent">
+                <div class="info-card" style="text-align:center; padding: 40px;">
+                    <i class="fas fa-layer-group" style="font-size:3rem; color:#2563eb; margin-bottom:16px;"></i>
+                    <h3>ABC Analizi Başlatın</h3>
+                    <p style="color:#64748b; margin-bottom:20px;">Önce veri yükleyip analiz edin, ardından ABC sınıflandırmasını çalıştırın.</p>
+                    <button class="btn-primary" onclick="runAbcAnalysis()">
+                        <i class="fas fa-play"></i> ABC Analizini Çalıştır
+                    </button>
+                </div>
+            </div>
         </div>
 
         <!-- Profile Page -->

@@ -746,5 +746,92 @@ def change_password(user_email):
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
+# ===== ABC ANALİZİ API =====
+
+@app.route('/api/data/abc-analysis', methods=['POST'])
+@require_auth
+def abc_analysis(user_email):
+    """
+    ABC Ürün Analizi: Ürünleri gelir katkısına göre A/B/C olarak sınıflandır.
+    A = Kümülatif gelirin ilk %80'i
+    B = Sonraki %15 (kümülatif %95'e kadar)
+    C = Kalan %5
+    """
+    try:
+        file_id = request.json.get('file_id')
+
+        if not file_id or user_email not in user_files or file_id not in user_files[user_email]:
+            return jsonify({'success': False, 'message': 'Dosya bulunamadı'}), 404
+
+        file_data = user_files[user_email][file_id]
+        if 'df' not in file_data:
+            return jsonify({'success': False, 'message': 'Önce veri analizi yapın'}), 400
+
+        df = file_data['df'].copy()
+        di = file_data['data_intelligence']
+
+        product_col = di.get_column('product')
+        revenue_col = di.get_column('revenue')
+        quantity_col = di.get_column('quantity')
+
+        if not product_col:
+            return jsonify({'success': False, 'message': 'Ürün sütunu bulunamadı'}), 400
+
+        # Gelir veya miktar bazlı sınıflandırma
+        value_col = revenue_col if revenue_col else quantity_col
+        if not value_col:
+            return jsonify({'success': False, 'message': 'Gelir veya miktar sütunu bulunamadı'}), 400
+
+        product_totals = df.groupby(product_col)[value_col].sum().reset_index()
+        product_totals.columns = ['product', 'value']
+        product_totals = product_totals[product_totals['value'] > 0]
+        product_totals = product_totals.sort_values('value', ascending=False).reset_index(drop=True)
+
+        total = product_totals['value'].sum()
+        product_totals['cumulative_pct'] = (product_totals['value'].cumsum() / total * 100).round(2)
+        product_totals['pct'] = (product_totals['value'] / total * 100).round(2)
+
+        def assign_class(cum_pct):
+            if cum_pct <= 80:
+                return 'A'
+            elif cum_pct <= 95:
+                return 'B'
+            else:
+                return 'C'
+
+        product_totals['class'] = product_totals['cumulative_pct'].apply(assign_class)
+
+        results = product_totals.to_dict(orient='records')
+        # Convert numpy types
+        for r in results:
+            r['value'] = float(r['value'])
+            r['cumulative_pct'] = float(r['cumulative_pct'])
+            r['pct'] = float(r['pct'])
+
+        summary = {
+            'A': {'count': int((product_totals['class'] == 'A').sum()),
+                  'revenue_pct': round(float(product_totals[product_totals['class'] == 'A']['pct'].sum()), 1)},
+            'B': {'count': int((product_totals['class'] == 'B').sum()),
+                  'revenue_pct': round(float(product_totals[product_totals['class'] == 'B']['pct'].sum()), 1)},
+            'C': {'count': int((product_totals['class'] == 'C').sum()),
+                  'revenue_pct': round(float(product_totals[product_totals['class'] == 'C']['pct'].sum()), 1)},
+        }
+        value_label = 'Gelir' if revenue_col else 'Miktar'
+
+        return jsonify({
+            'success': True,
+            'products': results,
+            'summary': summary,
+            'total_products': len(results),
+            'value_label': value_label,
+            'total_value': float(total),
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

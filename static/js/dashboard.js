@@ -71,6 +71,7 @@ function showPage(pageName) {
         'reports': 'reportsPage',
         'compare': 'comparePage',
         'alerts': 'alertsPage',
+        'abc': 'abcPage',
         'profile': 'profilePage',
     };
 
@@ -1297,4 +1298,82 @@ function setupSearchInputs() {
     }
     bindSearch('productSearchAnalysis', 'topProductsTable');
     bindSearch('productSearchPrediction', 'predictionTable');
+}
+
+// ===== ABC ANALİZİ =====
+
+async function runAbcAnalysis() {
+    if (!currentData || !currentData.file_id) {
+        alert('Lütfen önce veri yükleyip analiz edin!');
+        return;
+    }
+
+    const token = localStorage.getItem('userToken');
+    const content = document.getElementById('abcContent');
+    content.innerHTML = '<div style="text-align:center;padding:40px;"><i class="fas fa-spinner fa-spin" style="font-size:2rem;color:#2563eb;"></i><p style="margin-top:12px;">ABC analizi hesaplanıyor...</p></div>';
+
+    try {
+        const res = await fetch('/api/data/abc-analysis', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+            body: JSON.stringify({ file_id: currentData.file_id })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message);
+        renderAbcResults(data);
+    } catch (err) {
+        content.innerHTML = `<div class="alert-item critical"><i class="fas fa-exclamation-circle"></i> Hata: ${err.message}</div>`;
+    }
+}
+
+function renderAbcResults(data) {
+    const { products, summary, value_label, total_value } = data;
+
+    const classColors = { A: '#10b981', B: '#f59e0b', C: '#ef4444' };
+    const classBg    = { A: '#d1fae5', B: '#fef3c7', C: '#fee2e2' };
+
+    let html = `
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:28px;">
+            ${['A','B','C'].map(cls => `
+            <div style="background:${classBg[cls]};border:2px solid ${classColors[cls]};border-radius:12px;padding:20px;text-align:center;">
+                <div style="font-size:2rem;font-weight:800;color:${classColors[cls]};">${cls}</div>
+                <div style="font-size:1.4rem;font-weight:700;margin:4px 0;">${summary[cls].count} Ürün</div>
+                <div style="color:#475569;font-size:.9rem;">${value_label} Katkısı: <strong>%${summary[cls].revenue_pct}</strong></div>
+            </div>`).join('')}
+        </div>
+        <div style="margin-bottom:12px;display:flex;align-items:center;gap:12px;">
+            <h3 style="margin:0;">Ürün Sınıflandırması</h3>
+            <span style="font-size:.85rem;color:#64748b;">(${value_label} bazlı)</span>
+        </div>
+        <div style="overflow-x:auto;">
+        <table>
+            <thead><tr>
+                <th>#</th><th>Ürün</th>
+                <th>${value_label}</th>
+                <th>Pay %</th>
+                <th>Kümülatif %</th>
+                <th>Sınıf</th>
+            </tr></thead>
+            <tbody>`;
+
+    products.forEach((p, i) => {
+        const bg = classBg[p.class];
+        const col = classColors[p.class];
+        html += `<tr style="background:${i % 2 === 0 ? '#fff' : '#f8fafc'}">
+            <td>${i + 1}</td>
+            <td><strong>${p.product}</strong></td>
+            <td>${Number(p.value).toLocaleString('tr-TR', {maximumFractionDigits:0})}</td>
+            <td>%${p.pct}</td>
+            <td>%${p.cumulative_pct}</td>
+            <td><span style="background:${bg};color:${col};font-weight:700;padding:4px 12px;border-radius:20px;border:1.5px solid ${col};">${p.class}</span></td>
+        </tr>`;
+    });
+
+    html += `</tbody></table></div>
+        <div style="margin-top:20px;padding:16px;background:#f1f5f9;border-radius:10px;font-size:.88rem;color:#475569;">
+            <strong>ABC Analizi Nedir?</strong> — A sınıfı ürünler toplam gelirin %80'ini oluşturur, öncelikli yönetim gerektirir.
+            B sınıfı orta önem taşır (%15). C sınıfı çok sayıda fakat düşük katkılı ürünlerdir (%5).
+        </div>`;
+
+    document.getElementById('abcContent').innerHTML = html;
 }
