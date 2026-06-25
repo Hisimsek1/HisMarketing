@@ -746,6 +746,60 @@ def change_password(user_email):
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
+# ===== GENEL BAKIŞ (OVERVIEW) API =====
+
+@app.route('/api/dashboard/summary', methods=['GET'])
+@require_auth
+def dashboard_summary(user_email):
+    """
+    Dashboard genel bakış özeti:
+    En son analiz + en son tahmin verilerinden önemli metrikleri döndür.
+    """
+    try:
+        analysis = load_user_data(user_email, 'analysis')
+        prediction = load_user_data(user_email, 'prediction')
+        thresholds = load_user_data(user_email, 'thresholds') or {}
+
+        summary = {
+            'has_analysis': bool(analysis),
+            'has_prediction': bool(prediction),
+        }
+
+        if analysis:
+            product_profits = analysis.get('product_profits', [])
+            top_product = product_profits[0]['product'] if product_profits else None
+            summary['analysis'] = {
+                'total_revenue': analysis.get('total_revenue', 0),
+                'total_expense': analysis.get('total_expense', 0),
+                'net_profit': analysis.get('net_profit', 0),
+                'product_count': analysis.get('product_count', 0),
+                'top_product': top_product,
+            }
+
+        if prediction:
+            preds = prediction.get('predictions', [])
+            alerts_count = 0
+            for pred in preds:
+                product = pred['product']
+                monthly_preds = pred.get('monthly_predictions', [])
+                next_month = monthly_preds[0] if monthly_preds else 0
+                thr = thresholds.get(product, {})
+                current_stock = thr.get('current_stock')
+                if current_stock is not None and next_month > 0 and current_stock < next_month:
+                    alerts_count += 1
+
+            summary['prediction'] = {
+                'accuracy': prediction.get('accuracy', 0),
+                'total_products': prediction.get('total_products', 0),
+                'last_data_date': prediction.get('last_data_date', ''),
+                'alerts_count': alerts_count,
+            }
+
+        return jsonify({'success': True, **summary})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 # ===== VERİ GEÇMİŞİ API =====
 
 @app.route('/api/history/list', methods=['GET'])

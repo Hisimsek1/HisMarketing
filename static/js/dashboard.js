@@ -38,6 +38,7 @@ document.addEventListener('DOMContentLoaded', function() {
     setupNavigation();
     setupFileUpload();
     setupSearchInputs();
+    loadOverview();
 });
 
 function setupNavigation() {
@@ -65,6 +66,7 @@ function showPage(pageName) {
     pages.forEach(page => page.classList.remove('active'));
 
     const pageMap = {
+        'overview': 'overviewPage',
         'upload': 'uploadPage',
         'analysis': 'analysisPage',
         'prediction': 'predictionPage',
@@ -83,6 +85,7 @@ function showPage(pageName) {
         targetPage.classList.add('active');
     }
 
+    if (pageName === 'overview') loadOverview();
     if (pageName === 'alerts') loadAlerts();
     if (pageName === 'profile') loadProfile();
     if (pageName === 'compare') initComparePage();
@@ -1302,6 +1305,127 @@ function setupSearchInputs() {
     }
     bindSearch('productSearchAnalysis', 'topProductsTable');
     bindSearch('productSearchPrediction', 'predictionTable');
+}
+
+// ===== GENEL BAKIŞ =====
+
+async function loadOverview() {
+    const token = localStorage.getItem('userToken');
+    const content = document.getElementById('overviewContent');
+    if (!content) return;
+
+    try {
+        const res = await fetch('/api/dashboard/summary', {
+            headers: { 'Authorization': 'Bearer ' + token }
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message);
+        renderOverview(data);
+    } catch (err) {
+        if (content) content.innerHTML = `<div class="alert-item critical">Genel bakış yüklenemedi: ${err.message}</div>`;
+    }
+}
+
+function renderOverview(data) {
+    const content = document.getElementById('overviewContent');
+    if (!content) return;
+    const userName = localStorage.getItem('userName') || 'Kullanıcı';
+
+    if (!data.has_analysis && !data.has_prediction) {
+        content.innerHTML = `
+            <div style="text-align:center;padding:60px 20px;">
+                <i class="fas fa-rocket" style="font-size:4rem;color:#2563eb;margin-bottom:20px;"></i>
+                <h2>Hoş geldiniz, ${userName}!</h2>
+                <p style="color:#64748b;font-size:1.1rem;margin:12px 0 28px;">Başlamak için veri yükleyin ve analiz çalıştırın.</p>
+                <button class="btn-primary" onclick="document.querySelector('[data-page=upload]').click()">
+                    <i class="fas fa-upload"></i> Veri Yükle
+                </button>
+            </div>`;
+        return;
+    }
+
+    let html = `<div style="display:grid;gap:20px;">`;
+
+    if (data.has_analysis) {
+        const a = data.analysis;
+        const profitColor = a.net_profit >= 0 ? '#10b981' : '#ef4444';
+        html += `
+            <div class="card">
+                <h3 style="margin-bottom:16px;"><i class="fas fa-chart-bar" style="color:#2563eb;margin-right:8px;"></i> Son Analiz Özeti</h3>
+                <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;">
+                    <div class="stat-card">
+                        <div class="stat-label">Toplam Gelir</div>
+                        <div class="stat-value">${formatCurrency(a.total_revenue)}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Toplam Gider</div>
+                        <div class="stat-value">${formatCurrency(a.total_expense)}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Net Kâr</div>
+                        <div class="stat-value" style="color:${profitColor};">${formatCurrency(a.net_profit)}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Ürün Sayısı</div>
+                        <div class="stat-value">${a.product_count}</div>
+                    </div>
+                </div>
+                ${a.top_product ? `<div style="margin-top:14px;padding:12px 16px;background:#eff6ff;border-radius:8px;color:#1e40af;font-size:.9rem;">
+                    <i class="fas fa-trophy" style="color:#f59e0b;margin-right:6px;"></i>
+                    En çok satan ürün: <strong>${a.top_product}</strong>
+                </div>` : ''}
+            </div>`;
+    }
+
+    if (data.has_prediction) {
+        const p = data.prediction;
+        html += `
+            <div class="card">
+                <h3 style="margin-bottom:16px;"><i class="fas fa-brain" style="color:#10b981;margin-right:8px;"></i> Son Tahmin Özeti</h3>
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;">
+                    <div class="stat-card">
+                        <div class="stat-label">Model Doğruluğu</div>
+                        <div class="stat-value" style="color:#2563eb;">%${p.accuracy}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Tahmin Edilen Ürünler</div>
+                        <div class="stat-value">${p.total_products}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Stok Uyarıları</div>
+                        <div class="stat-value" style="color:${p.alerts_count > 0 ? '#ef4444' : '#10b981'};">
+                            ${p.alerts_count > 0 ? '⚠️ ' + p.alerts_count : '✅ 0'}
+                        </div>
+                    </div>
+                </div>
+                ${p.last_data_date ? `<div style="margin-top:14px;color:#64748b;font-size:.85rem;">
+                    <i class="fas fa-calendar-alt" style="margin-right:6px;"></i>Son veri tarihi: ${p.last_data_date}
+                </div>` : ''}
+            </div>`;
+    }
+
+    // Hızlı eylem butonları
+    html += `
+        <div class="card">
+            <h3 style="margin-bottom:16px;"><i class="fas fa-bolt" style="color:#f59e0b;margin-right:8px;"></i> Hızlı Erişim</h3>
+            <div style="display:flex;gap:12px;flex-wrap:wrap;">
+                <button class="btn-primary" onclick="document.querySelector('[data-page=upload]').click()">
+                    <i class="fas fa-upload"></i> Yeni Veri Yükle
+                </button>
+                <button class="btn-secondary" onclick="document.querySelector('[data-page=analysis]').click()" style="background:#f1f5f9;color:#475569;border:1.5px solid #e2e8f0;padding:10px 18px;border-radius:8px;cursor:pointer;font-weight:600;">
+                    <i class="fas fa-chart-bar"></i> Analizi Gör
+                </button>
+                <button class="btn-secondary" onclick="document.querySelector('[data-page=abc]').click()" style="background:#f1f5f9;color:#475569;border:1.5px solid #e2e8f0;padding:10px 18px;border-radius:8px;cursor:pointer;font-weight:600;">
+                    <i class="fas fa-layer-group"></i> ABC Analizi
+                </button>
+                <button class="btn-secondary" onclick="document.querySelector('[data-page=alerts]').click()" style="background:#f1f5f9;color:#475569;border:1.5px solid #e2e8f0;padding:10px 18px;border-radius:8px;cursor:pointer;font-weight:600;">
+                    <i class="fas fa-bell"></i> Uyarılar
+                </button>
+            </div>
+        </div>
+    </div>`;
+
+    content.innerHTML = html;
 }
 
 // ===== GEÇMİŞ =====

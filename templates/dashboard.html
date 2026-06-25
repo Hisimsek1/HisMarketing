@@ -17,7 +17,11 @@
         </div>
         
         <nav class="sidebar-nav">
-            <a href="#" class="nav-item active" data-page="upload">
+            <a href="#" class="nav-item active" data-page="overview">
+                <i class="fas fa-home"></i>
+                <span>Genel Bakış</span>
+            </a>
+            <a href="#" class="nav-item" data-page="upload">
                 <i class="fas fa-upload"></i>
                 <span>Veri Yükle</span>
             </a>
@@ -81,8 +85,22 @@
 
     <!-- Main Content -->
     <main class="main-content">
+        <!-- Overview Page -->
+        <div id="overviewPage" class="page active">
+            <div class="page-header">
+                <h1>Genel Bakış</h1>
+                <p>En son analiz ve tahminlerinizin özeti</p>
+            </div>
+            <div id="overviewContent">
+                <div style="text-align:center;padding:40px;">
+                    <i class="fas fa-spinner fa-spin" style="font-size:2rem;color:#2563eb;"></i>
+                    <p style="margin-top:12px;">Yükleniyor...</p>
+                </div>
+            </div>
+        </div>
+
         <!-- Upload Page -->
-        <div id="uploadPage" class="page active">
+        <div id="uploadPage" class="page">
             <div class="page-header">
                 <h1>Veri Yükleme</h1>
                 <p>Excel veya CSV dosyanızı yükleyerek analize başlayın</p>
